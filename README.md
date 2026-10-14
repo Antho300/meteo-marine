@@ -1,6 +1,6 @@
 # Météo marine — plongée et pêche
 
-Application web personnelle d’Anthony Navarro pour consulter les conditions météo-marines autour des côtes de France métropolitaine : Manche, Atlantique, Méditerranée et Corse.
+Application web personnelle d’Anthony Navarro pour consulter les conditions météo-marines en France métropolitaine et en mer Rouge.
 
 L’application est statique : HTML, CSS et JavaScript natifs, sans serveur applicatif. La carte utilise MapLibre GL JS et les prévisions affichées proviennent de fichiers JSON créés par le collecteur Python.
 
@@ -9,6 +9,7 @@ L’application est statique : HTML, CSS et JavaScript natifs, sans serveur appl
 ## Fonctionnalités
 
 - Carte interactive plein écran, adaptée au mobile, avec points de grille cliquables.
+- Page d’accueil avec accès aux cartes France (Manche, Atlantique, Méditerranée et Corse) et Mer Rouge (secteur des côtes égyptiennes).
 - Couches météo pour le vent, les vagues, la température de l’eau, les courants et la bathymétrie.
 - Menu des contrôles repliable et commandes de carte espacées pour faciliter l’usage sur mobile.
 - Apparence générale au choix (`Bleu pétrole` par défaut ou `Clair`), modifiable depuis l’en-tête et mémorisée dans le navigateur.
@@ -24,18 +25,24 @@ L’application est statique : HTML, CSS et JavaScript natifs, sans serveur appl
 
 ## Données et limites
 
-Le collecteur `scripts/fetch_data.py` interroge les API Open-Meteo par lots de coordonnées. Il récupère notamment :
+Le collecteur `scripts/fetch_data.py` interroge les API Open-Meteo par lots de coordonnées et produit un fichier indépendant pour chaque zone. Il récupère notamment :
 
 - **Forecast API** : `wind_speed_10m`, `wind_gusts_10m`, `wind_direction_10m` et `pressure_msl`.
 - **Marine API** : `wave_height`, `wave_period`, `wave_direction`, `swell_wave_height`, `swell_wave_period`, `swell_wave_direction`, `sea_surface_temperature`, `ocean_current_velocity`, `ocean_current_direction` et `sea_level_height_msl`.
 
-Les valeurs Open-Meteo sont écrites dans `data/forecast.json`. Le vent et le courant sont fournis en km/h et convertis en nœuds dans l’interface ; les vagues et le niveau marin sont en mètres, les périodes en secondes et la température en degrés Celsius. Certaines variables marines peuvent être absentes, notamment près des terres ou hors de la couverture du modèle.
+Les valeurs France sont écrites dans `data/forecast.json` et celles de la Mer Rouge dans `data/forecast.red-sea.json`. Les données de la Mer Rouge sont collectées autour des côtes égyptiennes et utilisent le fuseau `Africa/Cairo`. Le vent et le courant sont fournis en km/h et convertis en nœuds dans l’interface ; les vagues et le niveau marin sont en mètres, les périodes en secondes et la température en degrés Celsius. Certaines variables marines peuvent être absentes, notamment près des terres ou hors de la couverture du modèle.
 
-La grille, d’environ 150 à 240 positions, est indicative. L’interpolation au clic et la propagation des vecteurs lissent les valeurs entre points : elles ne tiennent pas compte précisément du trait de côte ni des obstacles sous-marins.
+La grille est composée de positions de prévision du modèle, pas de stations météo ou de bouées de mesure. Elle est indicative : l’interpolation au clic et la propagation des vecteurs lissent les valeurs entre points et ne tiennent pas précisément compte du trait de côte ni des obstacles sous-marins. Pour la Mer Rouge, les positions sans aucune variable marine sur les cinq jours ne sont pas affichées ; une donnée manquante seulement à certaines heures reste affichée en gris pour l’heure sélectionnée, sans modifier les autres heures ni les autres points.
+
+Le collecteur exclut les coordonnées situées sur les terres à l’aide du masque de pays Natural Earth 1:10m, préparé pour les zones couvertes et fourni dans `data/land-mask.geojson` (données du domaine public). Ce contrôle évite les erreurs grossières de grille, mais ne remplace pas une carte marine détaillée : les points restent des coordonnées de prévision, leur espacement est de plusieurs kilomètres et les très petits îlots ou détails de côte peuvent ne pas être représentés.
+
+Chaque point du JSON conserve les coordonnées demandées au modèle et les coordonnées effectivement renvoyées par l’API Forecast et l’API Marine (`source_coordinates`). Ces dernières peuvent différer : Open-Meteo rattache une demande au point de grille du modèle le plus proche. Le CSV `data/coordinates.france.csv` ou `data/coordinates.red-sea.csv` permet de comparer côte à côte ces coordonnées, l’altitude du point de modèle et l’écart en kilomètres. Il est généré après chaque collecte par `scripts/export_coordinate_audit.py`. Dans VS Code, ouvrez le CSV puis choisissez **Ouvrir avec l’éditeur de texte** pour inspecter toutes les lignes ; le JSON correspondant contient également les séries horaires des variables demandées.
+
+Pour revoir l’ancienne grille France avant l’ajout du masque terrestre, comparez le fichier actuel avec la version enregistrée dans Git : `git diff HEAD -- data/forecast.json`. Vous pouvez aussi afficher l’ancienne version avec `git show HEAD:data/forecast.json`. La grille méditerranéenne a bien été recentrée : l’ancienne couvrait en partie l’Espagne et le large vers les Baléares ; la nouvelle cible les eaux au large du littoral français et exclut les points terrestres selon le masque.
 
 Le collecteur vérifie maintenant que les deux API répondent pour chacun des lots et renvoie un code d’erreur au moindre lot incomplet, sans remplacer le JSON déjà publié. Après avoir envoyé une modification du collecteur, vous pouvez relancer **Mettre à jour les prévisions marines** depuis l’onglet **Actions** du dépôt GitHub pour régénérer immédiatement les données.
 
-La bathymétrie et la profondeur ponctuelle sont fournies par le WMS EMODnet Bathymetry. Les couches utilisées sont `emodnet:mean` (profondeur) et `emodnet:contours` (isobathes). La profondeur demandée au point estimé correspond aux coordonnées cliquées ; si elle n’est pas accessible, l’interface affiche `n/d`.
+La bathymétrie et la profondeur ponctuelle en France sont fournies par le WMS EMODnet Bathymetry. Les couches utilisées sont `emodnet:mean` (profondeur) et `emodnet:contours` (isobathes). EMODnet ne couvrant pas la Mer Rouge, la couche et la profondeur n’y sont pas proposées.
 
 `sea_level_height_msl` est une hauteur par rapport au niveau moyen de la mer, et non une prédiction de marée portuaire. Le projet pourra accueillir ultérieurement une source de marée telle que le SHOM, sous réserve de ses conditions d’accès et de licence.
 
@@ -48,9 +55,14 @@ La bathymétrie et la profondeur ponctuelle sont fournies par le WMS EMODnet Bat
 │       └── update-data.yml   # collecte planifiée toutes les trois heures
 ├── data/
 │   ├── forecast.example.json # exemple de format, données fictives
-│   └── forecast.json         # prévisions utilisées par l’application
+│   ├── forecast.json         # prévisions France
+│   ├── forecast.red-sea.json # prévisions Mer Rouge
+│   ├── coordinates.france.csv # coordonnées demandées et réellement servies
+│   ├── coordinates.red-sea.csv
+│   └── land-mask.geojson     # masque terrestre Natural Earth pour la grille
 ├── scripts/
-│   └── fetch_data.py         # collecte et génération du JSON
+│   ├── fetch_data.py         # collecte et génération du JSON
+│   └── export_coordinate_audit.py # export de l’audit en CSV
 ├── app.js                    # interface et carte
 ├── config.js                 # cadrage et seuils modifiables
 ├── index.html
@@ -77,10 +89,12 @@ Python 3.10 ou plus récent est requis pour le collecteur. Dans PowerShell, à l
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe .\scripts\fetch_data.py
+.\.venv\Scripts\python.exe .\scripts\fetch_data.py --region france
+.\.venv\Scripts\python.exe .\scripts\fetch_data.py --region red-sea
+.\.venv\Scripts\python.exe .\scripts\export_coordinate_audit.py
 ```
 
-Le collecteur appelle Open-Meteo ; il n’utilise pas de clé API côté navigateur. Les dépendances de l’environnement `.venv` ne doivent pas être publiées.
+Le collecteur appelle Open-Meteo ; il n’utilise pas de clé API côté navigateur. Le workflow GitHub exécute ces deux collectes automatiquement. Les dépendances de l’environnement `.venv` ne doivent pas être publiées.
 
 ## Publier le projet sur GitHub
 
@@ -137,9 +151,9 @@ Le workflow `.github/workflows/update-data.yml` récupère les prévisions toute
 1. Dans le dépôt, ouvrez **Settings → Actions → General**.
 2. À **Workflow permissions**, sélectionnez **Read and write permissions**, puis enregistrez.
 3. Ouvrez **Actions**, sélectionnez **Mettre à jour les prévisions marines**, puis **Run workflow** pour faire une première collecte.
-4. Vérifiez que l’exécution réussit et que `data/forecast.json` est présent dans le dépôt. Les prochaines exécutions sont planifiées automatiquement ; GitHub peut décaler leur démarrage.
+4. Vérifiez que l’exécution réussit et que `data/forecast.json` et `data/forecast.red-sea.json` sont présents dans le dépôt. Les prochaines exécutions sont planifiées automatiquement ; GitHub peut décaler leur démarrage.
 
-Chaque collecte réussie met à jour le JSON et crée un commit automatique. Le site lit ce fichier avec un chemin relatif, ce qui fonctionne aussi pour une publication GitHub Pages à l’adresse d’un dépôt.
+Chaque collecte réussie met à jour les deux fichiers JSON et crée un commit automatique. Le site lit ces fichiers avec des chemins relatifs, ce qui fonctionne aussi pour une publication GitHub Pages à l’adresse d’un dépôt.
 
 ## Autre hébergement gratuit : Cloudflare Pages
 

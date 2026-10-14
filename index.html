@@ -4,13 +4,50 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#f5f7f5">
-    <meta name="description" content="Météo marine personnelle pour la plongée et la pêche sur les côtes françaises.">
-    <title>Météo marine plongée &amp; pêche — Anthony Navarro</title>
+    <meta name="description" content="Météo marine personnelle pour la plongée et la pêche en France et en mer Rouge.">
+    <title>Météo marine — Anthony Navarro</title>
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
     <link rel="stylesheet" href="./style.css">
   </head>
   <body>
-    <main class="app-shell">
+    <main class="home-page" id="home-page">
+      <header class="home-header">
+        <a class="home-brand" href="./" aria-label="Accueil météo marine">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32"><path d="M3 12c4 0 4-4 8-4s4 4 8 4 4-4 10-4M3 20c4 0 4-4 8-4s4 4 8 4 4-4 10-4M3 27c4 0 4-4 8-4s4 4 8 4 4-4 10-4"/></svg>
+          </span>
+          <span><strong>Météo marine</strong><small>par Anthony Navarro</small></span>
+        </a>
+        <span class="home-private">Plongée · pêche</span>
+      </header>
+      <section class="home-content" aria-labelledby="home-title">
+        <p class="home-eyebrow">VOTRE CARTE MARINE</p>
+        <h1 id="home-title">Quelle zone souhaitez-vous consulter&nbsp;?</h1>
+        <p class="home-intro">Choisissez une zone pour consulter les conditions météo-marines et les prévisions.</p>
+        <nav class="area-tabs" aria-label="Choisir une zone">
+          <a class="area-card" href="?region=france">
+            <span class="area-card-icon" aria-hidden="true">⌁</span>
+            <span class="area-card-copy">
+              <strong>France</strong>
+              <span>Manche, Atlantique, Méditerranée et Corse</span>
+            </span>
+            <span class="area-card-arrow" aria-hidden="true">→</span>
+          </a>
+          <a class="area-card" href="?region=red-sea">
+            <span class="area-card-icon red-sea-icon" aria-hidden="true">≈</span>
+            <span class="area-card-copy">
+              <strong>Mer Rouge</strong>
+              <span>Prévisions autour de Hurghada et du nord de la mer Rouge</span>
+            </span>
+            <span class="area-card-arrow" aria-hidden="true">→</span>
+          </a>
+        </nav>
+        <p class="home-footnote">Les données sont indicatives et peuvent varier selon la zone et le modèle disponible.</p>
+      </section>
+      <footer class="home-footer">Météo marine personnelle · Données <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a></footer>
+    </main>
+
+    <main class="app-shell" hidden>
       <div id="map" aria-label="Carte interactive des conditions météo-marines"></div>
       <div class="map-compass" id="map-compass" role="img" aria-label="Boussole, cap nord 000 degrés">
         <span class="compass-cardinal compass-north">N</span>

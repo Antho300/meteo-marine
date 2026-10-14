@@ -2,6 +2,17 @@
   "use strict";
 
   const CONFIG = window.MARINE_CONFIG;
+  const regionKey = new URLSearchParams(window.location.search).get("region");
+  const regionConfig = regionKey === "france" || regionKey === "red-sea"
+    ? CONFIG.regions[regionKey]
+    : null;
+  if (!regionConfig) return;
+
+  const appShell = document.querySelector(".app-shell");
+  document.querySelector("#home-page").hidden = true;
+  appShell.hidden = false;
+  document.title = `Météo marine ${regionConfig.label} — Anthony Navarro`;
+
   const KNOTS_PER_KMH = 1 / 1.852;
   const MAP_STYLES = {
     liberty: "https://tiles.openfreemap.org/styles/liberty",
@@ -47,10 +58,14 @@
     toast: $("#toast"),
     mapLegend: $("#map-legend")
   };
+  if (!regionConfig.bathymetry) {
+    const bathymetryOption = elements.layerSelect.querySelector('option[value="bathymetry"]');
+    bathymetryOption.disabled = true;
+    bathymetryOption.textContent = "Bathymétrie (non disponible)";
+  }
   const menuToggle = $("#menu-toggle");
   const mapControls = $("#map-controls");
   const appearanceToggle = $("#appearance-toggle");
-  const appShell = document.querySelector(".app-shell");
   const savedAppearance = localStorage.getItem("marine-ui-theme") || localStorage.getItem("marine-menu-theme");
   let lightAppearance = savedAppearance === "light";
   appShell.classList.toggle("theme-light", lightAppearance);
@@ -241,7 +256,7 @@
     const units = { wind: "km/h", waves: "m", water: "°C", current: "nd", bathymetry: "m" };
     const legend = layer === "bathymetry"
       ? "<span class=\"legend-dot calm\"></span><span>Profondeur et isobathes</span>"
-      : "<span class=\"legend-dot calm\"></span><span>Faible</span><span class=\"legend-dot moderate\"></span><span>Modéré</span><span class=\"legend-dot rough\"></span><span>Fort</span>";
+      : "<span class=\"legend-dot calm\"></span><span>Faible</span><span class=\"legend-dot moderate\"></span><span>Modéré</span><span class=\"legend-dot rough\"></span><span>Fort</span><span class=\"legend-dot unknown\"></span><span>n/d à l’heure choisie</span>";
     elements.mapLegend.innerHTML = legend;
     elements.mapLegend.setAttribute("aria-label", `${title}, unités ${units[layer]}`);
   }
@@ -936,7 +951,13 @@
     addMetric("Direction courant", null, "", "unknown", directionText(pointValue(point, "ocean_current_direction")));
     addMetric("Niveau marin", pointValue(point, "sea_level_height_msl"), "m");
     addMetric("Pression", pressure, "hPa", pressureSeverity(pressure));
-    elements.depthValue = addMetric("Profondeur · EMODnet", null, "m", "unknown", "Chargement…");
+    elements.depthValue = addMetric(
+      "Profondeur · EMODnet",
+      null,
+      "m",
+      "unknown",
+      regionConfig.bathymetry ? "Chargement…" : "Non couvert"
+    );
     elements.depthValue.closest(".metric-card").classList.add("depth-metric");
     elements.depthValue.title = point.estimated
       ? "Profondeur du fond EMODnet recherchée aux coordonnées du point estimé."
@@ -945,7 +966,7 @@
     renderAssessment(point);
     renderChart(point);
     updateSelectedFeature();
-    void loadDepth(point);
+    if (regionConfig.bathymetry) void loadDepth(point);
   }
 
   async function loadDepth(point) {
@@ -1213,10 +1234,10 @@
     map = new maplibregl.Map({
       container: "map",
       style: MAP_STYLES[elements.basemapSelect.value],
-      center: CONFIG.map.initialCenter,
-      zoom: CONFIG.map.initialZoom,
-      minZoom: CONFIG.map.minZoom,
-      maxZoom: CONFIG.map.maxZoom,
+      center: regionConfig.map.initialCenter,
+      zoom: regionConfig.map.initialZoom,
+      minZoom: regionConfig.map.minZoom,
+      maxZoom: regionConfig.map.maxZoom,
       attributionControl: false,
       cooperativeGestures: false
     });
@@ -1236,7 +1257,7 @@
     }, { passive: false });
     map.addControl(new maplibregl.AttributionControl({
       compact: true,
-      customAttribution: "Bathymétrie © EMODnet Bathymetry"
+      customAttribution: "Données météo © <a href=\"https://open-meteo.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Open-Meteo</a> · Bathymétrie © EMODnet Bathymetry"
     }), "bottom-right");
     const attributionControl = map.getContainer().querySelector(".maplibregl-ctrl-bottom-right");
     if (attributionControl) {
@@ -1274,8 +1295,8 @@
 
   async function loadForecast() {
     let isExample = false;
-    let response = await fetch("./data/forecast.json", { cache: "no-store" });
-    if (!response.ok) {
+    let response = await fetch(regionConfig.dataFile, { cache: "no-store" });
+    if (!response.ok && regionKey === "france") {
       response = await fetch("./data/forecast.example.json", { cache: "no-store" });
       isExample = true;
     }

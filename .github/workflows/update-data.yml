@@ -30,17 +30,23 @@ jobs:
       - name: Installer les dépendances
         run: python -m pip install -r requirements.txt
 
-      - name: Générer le fichier des prévisions
-        run: python scripts/fetch_data.py
+      - name: Générer les prévisions France
+        run: python scripts/fetch_data.py --region france
+
+      - name: Générer les prévisions Mer Rouge
+        run: python scripts/fetch_data.py --region red-sea
+
+      - name: Exporter les coordonnées demandées et celles des modèles
+        run: python scripts/export_coordinate_audit.py
 
       - name: Publier la mise à jour des données
         run: |
-          if git diff --quiet -- data/forecast.json && git ls-files --error-unmatch data/forecast.json >/dev/null 2>&1; then
+          if git diff --quiet -- data/forecast.json data/forecast.red-sea.json data/coordinates.france.csv data/coordinates.red-sea.csv && git ls-files --error-unmatch data/forecast.json data/forecast.red-sea.json data/coordinates.france.csv data/coordinates.red-sea.csv >/dev/null 2>&1; then
             echo "Aucune donnée modifiée."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/forecast.json
-          git commit -m "chore: mise à jour des prévisions marines"
+          git add data/forecast.json data/forecast.red-sea.json data/coordinates.france.csv data/coordinates.red-sea.csv
+          git commit -m "chore: mise à jour des prévisions et coordonnées"
           git push

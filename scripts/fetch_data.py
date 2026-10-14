@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Build a compact, static five-day marine forecast for French coastal waters."""
+"""Build compact, static five-day forecasts for France and the Red Sea."""
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import math
@@ -18,7 +19,11 @@ from urllib3.util.retry import Retry
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "data" / "forecast.json"
+OUTPUTS = {
+    "france": ROOT / "data" / "forecast.json",
+    "red-sea": ROOT / "data" / "forecast.red-sea.json",
+}
+LAND_MASK_PATH = ROOT / "data" / "land-mask.geojson"
 WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
 MARINE_URL = "https://marine-api.open-meteo.com/v1/marine"
 CHUNK_SIZE = 40
@@ -49,8 +54,8 @@ logging.basicConfig(
 )
 LOGGER = logging.getLogger("fetch-data")
 
-# These coarse marine polygons exclude most land while covering the main
-# French coastal waters. The grid is deliberately denser close to shore.
+# These coarse marine polygons exclude most land while covering each selected
+# coastal zone. The grid is deliberately denser close to shore.
 REGIONS = (
     {
         "name": "Manche",
@@ -94,18 +99,20 @@ REGIONS = (
         "name": "Méditerranée",
         "offshore_step": 0.85,
         "coastline": [
-            (7.9, 44.1), (7.3, 44.1), (6.8, 43.85), (6.3, 43.65),
-            (5.8, 43.45), (5.3, 43.3), (4.8, 43.25), (4.4, 43.35),
-            (4.0, 43.45), (3.7, 43.5), (3.3, 43.45), (3.0, 43.3),
-            (2.6, 43.15), (2.2, 43.0), (1.7, 42.9), (1.0, 42.8),
-            (0.0, 42.65), (-1.2, 41.0),
+            (3.17, 42.44), (3.12, 42.72), (3.1, 42.9), (3.2, 43.05),
+            (3.35, 43.2), (3.55, 43.3), (3.8, 43.35), (4.2, 43.35),
+            (4.5, 43.3), (4.8, 43.25), (5.0, 43.2), (5.3, 43.25),
+            (5.6, 43.2), (5.9, 43.1), (6.2, 43.1), (6.5, 43.2),
+            (6.8, 43.35), (7.1, 43.45), (7.4, 43.65), (7.8, 43.75),
+            (7.9, 43.8),
         ],
         "polygon": [
-            (-1.2, 41.0), (7.9, 41.0), (7.9, 44.1), (7.3, 44.1),
-            (6.8, 43.85), (6.3, 43.65), (5.8, 43.45), (5.3, 43.3),
-            (4.8, 43.25), (4.4, 43.35), (4.0, 43.45), (3.7, 43.5),
-            (3.3, 43.45), (3.0, 43.3), (2.6, 43.15), (2.2, 43.0),
-            (1.7, 42.9), (1.0, 42.8), (0.0, 42.65), (-1.2, 41.0),
+            (3.17, 42.44), (3.12, 42.72), (3.1, 42.9), (3.2, 43.05),
+            (3.35, 43.2), (3.55, 43.3), (3.8, 43.35), (4.2, 43.35),
+            (4.5, 43.3), (4.8, 43.25), (5.0, 43.2), (5.3, 43.25),
+            (5.6, 43.2), (5.9, 43.1), (6.2, 43.1), (6.5, 43.2),
+            (6.8, 43.35), (7.1, 43.45), (7.4, 43.65), (7.8, 43.75),
+            (7.9, 43.8), (7.9, 41.0), (3.17, 41.0), (3.17, 42.44),
         ],
     },
     {
@@ -130,6 +137,35 @@ REGIONS = (
     },
 )
 
+RED_SEA_REGIONS = (
+    {
+        "name": "Mer Rouge · Égypte",
+        "offshore_step": 0.16,
+        "coastline": [
+            (33.85, 25.0), (33.65, 26.0), (33.55, 27.0), (33.8, 28.0),
+            (34.1, 28.8),
+        ],
+        "polygon": [
+            (33.85, 25.0), (36.55, 25.0), (36.25, 26.0), (35.85, 27.0),
+            (35.35, 28.0), (34.85, 28.8), (33.65, 28.8), (33.5, 28.0),
+            (33.45, 27.0), (33.55, 26.0), (33.85, 25.0),
+        ],
+    },
+)
+
+COLLECTIONS = {
+    "france": {
+        "regions": REGIONS,
+        "timezone": "Europe/Paris",
+        "label": "France",
+    },
+    "red-sea": {
+        "regions": RED_SEA_REGIONS,
+        "timezone": "Africa/Cairo",
+        "label": "Mer Rouge",
+    },
+}
+
 
 def point_in_polygon(lon: float, lat: float, polygon: list[tuple[float, float]]) -> bool:
     inside = False
@@ -143,6 +179,53 @@ def point_in_polygon(lon: float, lat: float, polygon: list[tuple[float, float]])
                 inside = not inside
         previous = current
     return inside
+
+
+def load_land_mask() -> list[tuple[float, float, float, float, list[tuple[float, float]]]]:
+    try:
+        document = json.loads(LAND_MASK_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Unable to load land mask {LAND_MASK_PATH}: {exc}") from exc
+    if document.get("type") != "FeatureCollection":
+        raise ValueError(f"Invalid land mask format in {LAND_MASK_PATH}.")
+
+    polygons = []
+    for feature in document.get("features", []):
+        geometry = feature.get("geometry") or {}
+        coordinates = geometry.get("coordinates", [])
+        if geometry.get("type") == "Polygon":
+            country_polygons = [coordinates]
+        elif geometry.get("type") == "MultiPolygon":
+            country_polygons = coordinates
+        else:
+            continue
+        for polygon in country_polygons:
+            if not polygon or len(polygon[0]) < 4:
+                continue
+            ring = [(float(lon), float(lat)) for lon, lat in polygon[0]]
+            polygons.append((
+                min(lon for lon, _ in ring),
+                min(lat for _, lat in ring),
+                max(lon for lon, _ in ring),
+                max(lat for _, lat in ring),
+                ring,
+            ))
+    if not polygons:
+        raise ValueError(f"The land mask in {LAND_MASK_PATH} contains no polygons.")
+    return polygons
+
+
+def point_on_land(
+    lon: float,
+    lat: float,
+    land_mask: list[tuple[float, float, float, float, list[tuple[float, float]]]],
+) -> bool:
+    return any(
+        min_lon <= lon <= max_lon
+        and min_lat <= lat <= max_lat
+        and point_in_polygon(lon, lat, polygon)
+        for min_lon, min_lat, max_lon, max_lat, polygon in land_mask
+    )
 
 
 def distance_to_coast(lon: float, lat: float, coastline: list[tuple[float, float]]) -> float:
@@ -162,11 +245,15 @@ def distance_to_coast(lon: float, lat: float, coastline: list[tuple[float, float
     return nearest
 
 
-def build_grid() -> list[dict[str, Any]]:
+def build_grid(
+    regions: tuple[dict[str, Any], ...] = REGIONS,
+    land_mask: list[tuple[float, float, float, float, list[tuple[float, float]]]] | None = None,
+) -> list[dict[str, Any]]:
+    land_mask = land_mask if land_mask is not None else load_land_mask()
     nearshore_points: list[dict[str, Any]] = []
     offshore_points: list[dict[str, Any]] = []
     seen: set[tuple[int, int]] = set()
-    for region in REGIONS:
+    for region in regions:
         polygon = region["polygon"]
         coastline = region["coastline"]
         min_lon = min(point[0] for point in polygon)
@@ -187,7 +274,7 @@ def build_grid() -> list[dict[str, Any]]:
                         on_land = land_polygon and point_in_polygon(lon, lat, land_polygon)
                         coast_distance = distance_to_coast(lon, lat, coastline)
                         is_nearshore = coast_distance <= 0.55
-                        if not on_land and is_nearshore == nearshore:
+                        if not on_land and not point_on_land(lon, lat, land_mask) and is_nearshore == nearshore:
                             key = (round(lon * 10000), round(lat * 10000))
                             if key not in seen:
                                 seen.add(key)
@@ -252,13 +339,14 @@ def fetch_batch(
     url: str,
     points: list[dict[str, Any]],
     fields: tuple[str, ...],
+    timezone_name: str,
 ) -> list[dict[str, Any]] | None:
     params = {
         "latitude": ",".join(str(point["lat"]) for point in points),
         "longitude": ",".join(str(point["lon"]) for point in points),
         "hourly": ",".join(fields),
         "forecast_days": FORECAST_DAYS,
-        "timezone": "Europe/Paris",
+        "timezone": timezone_name,
         "wind_speed_unit": "kmh",
     }
     try:
@@ -275,8 +363,28 @@ def fetch_batch(
         return None
 
 
-def main() -> int:
-    points = build_grid()
+def has_marine_coverage(point: dict[str, Any]) -> bool:
+    hourly = point.get("hourly", {})
+    return any(
+        isinstance(hourly.get(field), list)
+        and any(
+            isinstance(value, (int, float)) and math.isfinite(value)
+            for value in hourly[field]
+        )
+        for field in MARINE_FIELDS
+    )
+
+
+def main(region_key: str = "france") -> int:
+    collection = COLLECTIONS[region_key]
+    timezone_name = collection["timezone"]
+    output_path = OUTPUTS[region_key]
+    try:
+        land_mask = load_land_mask()
+    except (RuntimeError, ValueError):
+        LOGGER.exception("Unable to build the grid without a valid land mask.")
+        return 1
+    points = build_grid(collection["regions"], land_mask)
     if not points:
         LOGGER.error("The coastal grid is empty; refusing to write a forecast.")
         return 1
@@ -300,8 +408,12 @@ def main() -> int:
     for start in range(0, len(points), CHUNK_SIZE):
         batch_points = points[start : start + CHUNK_SIZE]
         batch_targets = output_points[start : start + CHUNK_SIZE]
-        weather = fetch_batch(session, WEATHER_URL, batch_points, WEATHER_FIELDS)
-        marine = fetch_batch(session, MARINE_URL, batch_points, MARINE_FIELDS)
+        weather = fetch_batch(
+            session, WEATHER_URL, batch_points, WEATHER_FIELDS, timezone_name
+        )
+        marine = fetch_batch(
+            session, MARINE_URL, batch_points, MARINE_FIELDS, timezone_name
+        )
         if weather is None or marine is None:
             failed_batches.append(start // CHUNK_SIZE + 1)
             LOGGER.error(
@@ -347,6 +459,20 @@ def main() -> int:
             continue
 
         for index, target in enumerate(batch_targets):
+            target["source_coordinates"] = {
+                "requested": {
+                    "latitude": target["lat"],
+                    "longitude": target["lon"],
+                },
+                "forecast": {
+                    key: weather[index].get(key)
+                    for key in ("latitude", "longitude", "elevation")
+                },
+                "marine": {
+                    key: marine[index].get(key)
+                    for key in ("latitude", "longitude", "elevation")
+                },
+            }
             for response_data, fields in (
                 (weather[index], WEATHER_FIELDS),
                 (marine[index], MARINE_FIELDS),
@@ -387,31 +513,64 @@ def main() -> int:
         LOGGER.error("No hourly forecast was received; refusing to replace existing data.")
         return 1
 
+    if region_key == "red-sea":
+        points_with_marine_data = [
+            point for point in output_points if has_marine_coverage(point)
+        ]
+        omitted_count = len(output_points) - len(points_with_marine_data)
+        if not points_with_marine_data:
+            LOGGER.error("No Red Sea grid points have marine data; refusing to publish.")
+            return 1
+        if omitted_count:
+            LOGGER.info(
+                "Omitting %d Red Sea grid points with no marine data in any forecast hour.",
+                omitted_count,
+            )
+        output_points = points_with_marine_data
+        if len(output_points) < 150:
+            LOGGER.warning(
+                "Red Sea marine grid contains %d usable points (target: 150-240).",
+                len(output_points),
+            )
+
     document = {
         "version": 1,
         "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "source": "Open-Meteo Forecast API + Marine API",
-        "timezone": "Europe/Paris",
+        "timezone": timezone_name,
         "forecast_days": FORECAST_DAYS,
         "grid_count": len(output_points),
         "hours": timeline,
         "points": output_points,
     }
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    temporary_output = OUTPUT.with_suffix(".json.tmp")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_output = output_path.with_suffix(".json.tmp")
     try:
         temporary_output.write_text(
             json.dumps(document, ensure_ascii=False, separators=(",", ":")) + "\n",
             encoding="utf-8",
         )
-        temporary_output.replace(OUTPUT)
+        temporary_output.replace(output_path)
     except OSError:
-        LOGGER.exception("Unable to write forecast file %s.", OUTPUT)
+        LOGGER.exception("Unable to write forecast file %s.", output_path)
         return 1
 
-    LOGGER.info("Wrote %s (%d points, %d hourly slots).", OUTPUT, len(output_points), len(timeline))
+    LOGGER.info(
+        "Wrote %s (%d points, %d hourly slots).",
+        output_path,
+        len(output_points),
+        len(timeline),
+    )
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--region",
+        choices=tuple(COLLECTIONS),
+        default="france",
+        help="forecast region to collect (default: france)",
+    )
+    arguments = parser.parse_args()
+    sys.exit(main(arguments.region))
