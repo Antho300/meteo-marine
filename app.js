@@ -32,18 +32,36 @@
     pointCoordinates: $("#point-coordinates"),
     metricGrid: $("#metric-grid"),
     assessment: $("#assessment"),
-    coordinateFrame: $("#coordinate-frame"),
+    compass: $("#map-compass"),
+    compassHeading: $("#compass-heading"),
     chartWater: $("#chart-water"),
     chartWaves: $("#chart-waves"),
     chartCurrent: $("#chart-current"),
     chartWaterValue: $("#trend-water-value"),
     chartWavesValue: $("#trend-waves-value"),
     chartCurrentValue: $("#trend-current-value"),
+    detailSheet: $("#detail-sheet"),
+    sheetResizeHandle: $("#sheet-resize-handle"),
     depthValue: null,
     estimateNote: $("#estimate-note"),
     toast: $("#toast"),
     mapLegend: $("#map-legend")
   };
+  const menuToggle = $("#menu-toggle");
+  const mapControls = $("#map-controls");
+  const appearanceToggle = $("#appearance-toggle");
+  const appShell = document.querySelector(".app-shell");
+  const savedAppearance = localStorage.getItem("marine-ui-theme") || localStorage.getItem("marine-menu-theme");
+  let lightAppearance = savedAppearance === "light";
+  appShell.classList.toggle("theme-light", lightAppearance);
+
+  function updateAppearanceButton() {
+    const nextAppearance = lightAppearance ? "bleu pétrole" : "claire";
+    appearanceToggle.setAttribute("aria-label", `Passer à l’apparence ${nextAppearance}`);
+    appearanceToggle.title = `Passer à l’apparence ${nextAppearance}`;
+  }
+
+  updateAppearanceButton();
 
   let forecast = null;
   let map = null;
@@ -756,7 +774,8 @@
         value: elements.chartWaterValue,
         field: "sea_surface_temperature",
         unit: "°C",
-        color: "#d18b38",
+        color: "#efb858",
+        lightColor: "#a96913",
         convert: (value) => value
       },
       {
@@ -764,7 +783,8 @@
         value: elements.chartWavesValue,
         field: "wave_height",
         unit: "m",
-        color: "#187b83",
+        color: "#62b9b3",
+        lightColor: "#187b83",
         convert: (value) => value
       },
       {
@@ -772,7 +792,8 @@
         value: elements.chartCurrentValue,
         field: "ocean_current_velocity",
         unit: "nd",
-        color: "#6b63a8",
+        color: "#b1a6f1",
+        lightColor: "#6b63a8",
         convert: (value) => value * KNOTS_PER_KMH
       }
     ];
@@ -800,7 +821,7 @@
     context.clearRect(0, 0, rect.width, rect.height);
     const valid = values.filter(isNumber);
     if (!valid.length) {
-      context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--muted");
+      context.fillStyle = getComputedStyle(appShell).getPropertyValue("--muted");
       context.font = "12px system-ui";
       context.fillText("Prévision indisponible", 35, 32);
       return;
@@ -815,8 +836,9 @@
     const max = high + spread * 0.15 || min + 1;
     const yFor = (value) => padding.top + height - (value - min) / (max - min) * height;
     const xFor = (index) => padding.left + (values.length <= 1 ? 0 : index / (values.length - 1)) * width;
-    const textColor = getComputedStyle(document.documentElement).getPropertyValue("--muted");
-    context.strokeStyle = "rgba(120, 145, 147, .24)";
+    const themeStyles = getComputedStyle(appShell);
+    const textColor = themeStyles.getPropertyValue("--muted");
+    context.strokeStyle = themeStyles.getPropertyValue("--chart-grid");
     context.lineWidth = 1;
     context.fillStyle = textColor;
     context.font = "10px system-ui";
@@ -858,7 +880,7 @@
         drawing = true;
       }
     });
-    context.strokeStyle = series.color;
+    context.strokeStyle = appShell.classList.contains("theme-light") ? series.lightColor : series.color;
     context.lineWidth = 2.25;
     context.lineCap = "round";
     context.lineJoin = "round";
@@ -1030,26 +1052,17 @@
     elements.timeOffset.textContent = differenceHours <= 0 ? "Début de prévision" : `+ ${differenceHours} h`;
   }
 
-  function updateCoordinateFrame() {
-    if (!map || !elements.coordinateFrame) return;
-    const { width, height } = map.getContainer().getBoundingClientRect();
-    const corners = {
-      nw: [14, 14],
-      ne: [width - 14, 14],
-      sw: [14, height - 14],
-      se: [width - 14, height - 14]
-    };
-    for (const [corner, pixel] of Object.entries(corners)) {
-      const coordinate = map.unproject(pixel);
-      const latitudeHemisphere = coordinate.lat >= 0 ? "N" : "S";
-      const longitudeHemisphere = coordinate.lng >= 0 ? "E" : "O";
-      const label = elements.coordinateFrame.querySelector(`[data-corner="${corner}"]`);
-      label.textContent = `${Math.abs(coordinate.lat).toFixed(1)}°${latitudeHemisphere} · ${Math.abs(coordinate.lng).toFixed(1)}°${longitudeHemisphere}`;
-    }
+  function updateCompass() {
+    if (!map || !elements.compass || !elements.compassHeading) return;
+    const bearing = ((map.getBearing() % 360) + 360) % 360;
+    const roundedBearing = Math.round(bearing) % 360;
+    elements.compass.style.setProperty("--compass-bearing", `${bearing}deg`);
+    elements.compassHeading.textContent = `${String(roundedBearing).padStart(3, "0")}°`;
+    elements.compass.setAttribute("aria-label", `Boussole, cap ${roundedBearing} degrés`);
   }
 
   function refreshViewVectors() {
-    updateCoordinateFrame();
+    updateCompass();
     if (map && forecast && map.getSource(VECTOR_SOURCE_ID)
       && (vectorsEnabled || propagationEnabled || selectedPoint?.estimated)) {
       if (propagationRefreshFrame) window.cancelAnimationFrame(propagationRefreshFrame);
@@ -1060,6 +1073,57 @@
         }
       });
     }
+  }
+
+  function setupSheetResizing() {
+    const sheet = elements.detailSheet;
+    const handle = elements.sheetResizeHandle;
+    const root = document.documentElement;
+    let dragStartY = 0;
+    let dragStartHeight = 0;
+    let activePointerId = null;
+
+    const syncSheetHeight = () => {
+      root.style.setProperty("--sheet-height", `${Math.ceil(sheet.getBoundingClientRect().height)}px`);
+    };
+    const setSheetHeight = (height) => {
+      const styles = window.getComputedStyle(sheet);
+      const minHeight = Number.parseFloat(styles.minHeight);
+      const configuredMaxHeight = Number.parseFloat(styles.maxHeight);
+      const maxHeight = Number.isFinite(configuredMaxHeight) ? configuredMaxHeight : window.innerHeight * 0.8;
+      sheet.style.height = `${Math.max(minHeight, Math.min(maxHeight, height))}px`;
+    };
+
+    new ResizeObserver(syncSheetHeight).observe(sheet);
+    syncSheetHeight();
+
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      activePointerId = event.pointerId;
+      dragStartY = event.clientY;
+      dragStartHeight = sheet.getBoundingClientRect().height;
+      handle.setPointerCapture(event.pointerId);
+      sheet.classList.add("is-resizing");
+      event.preventDefault();
+    });
+    handle.addEventListener("pointermove", (event) => {
+      if (event.pointerId !== activePointerId) return;
+      setSheetHeight(dragStartHeight + dragStartY - event.clientY);
+    });
+    const endResize = (event) => {
+      if (event.pointerId !== activePointerId) return;
+      activePointerId = null;
+      sheet.classList.remove("is-resizing");
+      syncSheetHeight();
+    };
+    handle.addEventListener("pointerup", endResize);
+    handle.addEventListener("pointercancel", endResize);
+    handle.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+      event.preventDefault();
+      const direction = event.key === "ArrowUp" ? 1 : -1;
+      setSheetHeight(sheet.getBoundingClientRect().height + direction * 32);
+    });
   }
 
   function handleTimeChange() {
@@ -1174,9 +1238,12 @@
       compact: true,
       customAttribution: "Bathymétrie © EMODnet Bathymetry"
     }), "bottom-right");
+    const attributionControl = map.getContainer().querySelector(".maplibregl-ctrl-bottom-right");
+    if (attributionControl) {
+      document.querySelector(".app-shell").append(attributionControl);
+      attributionControl.querySelector(".maplibregl-ctrl-attrib-button")?.click();
+    }
     addMapEvents();
-    $("#zoom-in").addEventListener("click", () => map.zoomIn());
-    $("#zoom-out").addEventListener("click", () => map.zoomOut());
     $("#locate-button").addEventListener("click", () => {
       if (!navigator.geolocation) {
         showToast("La géolocalisation n’est pas disponible sur cet appareil.");
@@ -1234,6 +1301,20 @@
   }
 
   function setupControls() {
+    appearanceToggle.addEventListener("click", () => {
+      lightAppearance = !lightAppearance;
+      appShell.classList.toggle("theme-light", lightAppearance);
+      localStorage.setItem("marine-ui-theme", lightAppearance ? "light" : "blue");
+      updateAppearanceButton();
+      if (selectedPoint) renderChart(selectedPoint);
+    });
+    menuToggle.addEventListener("click", () => {
+      const isCollapsed = mapControls.classList.toggle("is-collapsed");
+      menuToggle.setAttribute("aria-expanded", String(!isCollapsed));
+      menuToggle.setAttribute("aria-label", isCollapsed ? "Afficher le menu" : "Masquer le menu");
+      menuToggle.title = isCollapsed ? "Afficher le menu" : "Masquer le menu";
+      if (map) window.requestAnimationFrame(() => map.resize());
+    });
     elements.layerSelect.addEventListener("change", () => {
       paintMapData();
       if (selectedPoint) renderPoint(selectedPoint);
@@ -1273,11 +1354,12 @@
       updateSelectedFeature();
     });
     window.addEventListener("resize", () => {
-      updateCoordinateFrame();
+      updateCompass();
       if (selectedPoint) renderChart(selectedPoint);
     });
   }
 
+  setupSheetResizing();
   setupControls();
   loadForecast().catch((error) => {
     console.error("Impossible de charger les prévisions marines.", error);

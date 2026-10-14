@@ -12,17 +12,24 @@
   <body>
     <main class="app-shell">
       <div id="map" aria-label="Carte interactive des conditions météo-marines"></div>
-      <div class="coordinate-frame" id="coordinate-frame" aria-label="Coordonnées aux limites de la carte">
-        <span data-corner="nw"></span><span data-corner="ne"></span>
-        <span data-corner="sw"></span><span data-corner="se"></span>
+      <div class="map-compass" id="map-compass" role="img" aria-label="Boussole, cap nord 000 degrés">
+        <span class="compass-cardinal compass-north">N</span>
+        <span class="compass-cardinal compass-east">E</span>
+        <span class="compass-cardinal compass-south">S</span>
+        <span class="compass-cardinal compass-west">O</span>
+        <svg class="compass-needle" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M24 4 30 24 24 21 18 24Z" class="needle-north"/>
+          <path d="M24 44 18 24 24 27 30 24Z" class="needle-south"/>
+        </svg>
+        <span class="compass-heading" id="compass-heading">000°</span>
       </div>
 
       <header class="topbar glass">
-        <a class="brand" href="./" aria-label="Météo marine plongée et pêche par Anthony Navarro">
+        <a class="brand" href="./" aria-label="Météo marine plongée et pêche Par Anthony Navarro">
           <span class="brand-mark" aria-hidden="true">
             <svg viewBox="0 0 32 32"><path d="M3 12c4 0 4-4 8-4s4 4 8 4 4-4 10-4M3 20c4 0 4-4 8-4s4 4 8 4 4-4 10-4M3 27c4 0 4-4 8-4s4 4 8 4 4-4 10-4"/></svg>
           </span>
-          <span><strong>Météo marine plongée &amp; pêche</strong><small>par Anthony Navarro</small></span>
+          <span><strong>Météo marine plongée &amp; pêche</strong><small>Par Anthony Navarro</small></span>
         </a>
         <section class="time-control" aria-label="Prévision dans le temps">
           <div class="time-heading">
@@ -36,12 +43,21 @@
           <span class="live-dot"></span>
           <span id="updated-at">Chargement des données…</span>
         </div>
-        <button class="icon-button locate-button" id="locate-button" type="button" aria-label="Me localiser" title="Me localiser">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>
-        </button>
+        <div class="header-actions">
+          <button class="icon-button locate-button" id="locate-button" type="button" aria-label="Me localiser" title="Me localiser">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>
+          </button>
+          <button class="icon-button appearance-toggle" id="appearance-toggle" type="button" aria-label="Passer à l’apparence claire" title="Passer à l’apparence claire">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 15.4A8.8 8.8 0 0 1 8.6 3.5 8.9 8.9 0 1 0 20.5 15.4Z"/><path d="M16 3v4m-2-2h4"/></svg>
+          </button>
+        </div>
       </header>
 
-      <aside class="controls glass" aria-label="Contrôles de la carte">
+      <button class="menu-toggle" id="menu-toggle" type="button" aria-controls="map-controls" aria-expanded="false" aria-label="Afficher le menu" title="Afficher le menu">
+        <span class="menu-toggle-icon" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span class="menu-toggle-text">Menu</span>
+      </button>
+      <aside class="controls glass is-collapsed" id="map-controls" aria-label="Contrôles de la carte">
         <div class="summary-profile"><strong>Vue synthétique</strong><span>Plongée · pêche</span></div>
         <label class="field-label" for="layer-select">Afficher</label>
         <select id="layer-select" aria-label="Couche météo">
@@ -61,11 +77,14 @@
         <div class="vector-actions">
           <button class="vector-toggle" id="vector-toggle" type="button" aria-pressed="false" title="Afficher ou masquer les flèches des données de grille">
             <span class="vector-icon" aria-hidden="true">↗</span>
-            <span>Vecteurs</span>
+            <span class="vector-label">Vecteurs</span>
             <span class="toggle-state">INACTIFS</span>
           </button>
           <button class="vector-toggle" id="propagate-toggle" type="button" aria-pressed="false" title="Interpoler le champ de vecteurs entre les points de grille" disabled>
-            <span>Propager</span>
+            <span class="vector-icon propagation-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="m4 19 5-5m-5 0h5v5m2-5 5-5m-5 0h5v5m2-5 5-5m-5 0h5v5"/></svg>
+            </span>
+            <span class="vector-label">Propagation</span>
             <span class="toggle-state">INACTIF</span>
           </button>
         </div>
@@ -76,13 +95,10 @@
         <p class="map-hint">Touchez la carte pour choisir un point</p>
       </aside>
 
-      <div class="map-actions" aria-label="Commandes de la carte">
-        <button class="icon-button zoom-button" id="zoom-in" type="button" aria-label="Zoom avant">+</button>
-        <button class="icon-button zoom-button" id="zoom-out" type="button" aria-label="Zoom arrière">−</button>
-      </div>
-
       <section class="sheet glass" id="detail-sheet" aria-label="Conditions au point sélectionné" aria-live="polite">
-        <div class="sheet-handle" aria-hidden="true"><span></span></div>
+        <button class="sheet-handle" id="sheet-resize-handle" type="button" aria-label="Redimensionner le panneau des conditions" title="Faites glisser pour redimensionner">
+          <span></span>
+        </button>
         <div class="sheet-empty" id="empty-state">
           <span class="empty-icon" aria-hidden="true">⌖</span>
           <div><strong>Choisissez un point en mer</strong><p>Les conditions et les prévisions s’afficheront ici.</p></div>

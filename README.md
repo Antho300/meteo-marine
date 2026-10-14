@@ -10,11 +10,15 @@ L’application est statique : HTML, CSS et JavaScript natifs, sans serveur appl
 
 - Carte interactive plein écran, adaptée au mobile, avec points de grille cliquables.
 - Couches météo pour le vent, les vagues, la température de l’eau, les courants et la bathymétrie.
+- Menu des contrôles repliable et commandes de carte espacées pour faciliter l’usage sur mobile.
+- Apparence générale au choix (`Bleu pétrole` par défaut ou `Clair`), modifiable depuis l’en-tête et mémorisée dans le navigateur.
 - Styles de fond de carte OpenFreeMap et couche de profondeur/isobathes EMODnet.
 - Prévisions horaires jusqu’à cinq jours, avec curseur temporel.
 - Panneau détaillé au point choisi : vent, rafales, vagues, houle, température, courant, niveau marin, pression et profondeur EMODnet si disponible.
+- Panneau inférieur redimensionnable jusqu’à presque tout l’écran en faisant glisser sa poignée ; le menu de gauche adapte automatiquement sa hauteur.
 - Graphiques horaires sur 48 heures pour la température de l’eau, la hauteur des vagues et la vitesse du courant.
 - Vecteurs mesurés aux points de grille et champ de vecteurs interpolé.
+- Boussole compacte dans l’angle supérieur droit, avec points cardinaux et cap de la carte au centre.
 - Estimation au clic par pondération des points de grille voisins ; les estimations sont signalées et ne constituent pas des observations locales.
 - Heure de collecte affichée dans l’interface ; données manquantes indiquées par `n/d`.
 
