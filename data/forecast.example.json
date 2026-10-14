@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "updated_at": "2026-10-14T08:00:00+00:00",
+  "source": "Open-Meteo Forecast API + Marine API",
+  "timezone": "Europe/Paris",
+  "forecast_days": 5,
+  "grid_count": 1,
+  "hours": [
+    "2026-10-14T10:00", "2026-10-14T11:00", "2026-10-14T12:00",
+    "2026-10-14T13:00", "2026-10-14T14:00", "2026-10-14T15:00"
+  ],
+  "points": [
+    {
+      "lat": 48.375,
+      "lon": -4.375,
+      "region": "Manche",
+      "depth_m": null,
+      "hourly": {
+        "wind_speed_10m": [16.9, 18.4, 16.8, 16.6, 14.1, 14.5],
+        "wind_gusts_10m": [29.4, 31.0, 28.1, 27.7, 25.6, 24.8],
+        "wind_direction_10m": [250, 253, 252, 249, 246, 242],
+        "pressure_msl": [1015.2, 1014.8, 1014.4, 1014.0, 1013.7, 1013.3],
+        "wave_height": [0.34, 0.32, 0.32, 0.32, 0.32, 0.32],
+        "wave_period": [7.8, 7.85, 7.85, 7.85, 7.8, 7.75],
+        "wave_direction": [253, 253, 253, 253, 253, 253],
+        "swell_wave_height": [0.26, 0.26, 0.26, 0.26, 0.26, 0.26],
+        "swell_wave_period": [7.4, 7.4, 7.5, 7.6, 7.65, 7.7],
+        "swell_wave_direction": [254, 254, 254, 255, 255, 256],
+        "sea_surface_temperature": [16.2, 16.2, 16.2, 16.2, 16.2, 16.2],
+        "ocean_current_velocity": [0.22, 0.24, 0.27, 0.29, 0.31, 0.28],
+        "ocean_current_direction": [181, 185, 190, 195, 201, 205],
+        "sea_level_height_msl": [0.05, 0.11, 0.18, 0.24, 0.29, 0.32]
+      }
+    }
+  ]
+}

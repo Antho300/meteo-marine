@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#f5f7f5">
+    <meta name="description" content="Météo marine personnelle pour la plongée et la pêche sur les côtes françaises.">
+    <title>Météo marine plongée &amp; pêche — Anthony Navarro</title>
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <div id="map" aria-label="Carte interactive des conditions météo-marines"></div>
+      <div class="coordinate-frame" id="coordinate-frame" aria-label="Coordonnées aux limites de la carte">
+        <span data-corner="nw"></span><span data-corner="ne"></span>
+        <span data-corner="sw"></span><span data-corner="se"></span>
+      </div>
+
+      <header class="topbar glass">
+        <a class="brand" href="./" aria-label="Météo marine plongée et pêche par Anthony Navarro">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32"><path d="M3 12c4 0 4-4 8-4s4 4 8 4 4-4 10-4M3 20c4 0 4-4 8-4s4 4 8 4 4-4 10-4M3 27c4 0 4-4 8-4s4 4 8 4 4-4 10-4"/></svg>
+          </span>
+          <span><strong>Météo marine plongée &amp; pêche</strong><small>par Anthony Navarro</small></span>
+        </a>
+        <section class="time-control" aria-label="Prévision dans le temps">
+          <div class="time-heading">
+            <div><span class="eyebrow">PRÉVISION</span><strong id="time-label">—</strong></div>
+            <span class="time-offset" id="time-offset">Maintenant</span>
+          </div>
+          <input id="time-slider" type="range" min="0" max="119" value="0" aria-label="Heure de prévision">
+          <div class="time-range"><span>Maintenant</span><span>+ 5 jours</span></div>
+        </section>
+        <div class="header-status">
+          <span class="live-dot"></span>
+          <span id="updated-at">Chargement des données…</span>
+        </div>
+        <button class="icon-button locate-button" id="locate-button" type="button" aria-label="Me localiser" title="Me localiser">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>
+        </button>
+      </header>
+
+      <aside class="controls glass" aria-label="Contrôles de la carte">
+        <div class="summary-profile"><strong>Vue synthétique</strong><span>Plongée · pêche</span></div>
+        <label class="field-label" for="layer-select">Afficher</label>
+        <select id="layer-select" aria-label="Couche météo">
+          <option value="wind">Vent</option>
+          <option value="waves">Vagues</option>
+          <option value="water">Température de l’eau</option>
+          <option value="current">Courant</option>
+          <option value="bathymetry">Bathymétrie</option>
+        </select>
+        <label class="field-label basemap-label" for="basemap-select">Fond de carte</label>
+        <select id="basemap-select" aria-label="Fond de carte">
+          <option value="liberty">Standard</option>
+          <option value="bright">Clair</option>
+          <option value="positron">Minimaliste</option>
+          <option value="dark">Sombre</option>
+        </select>
+        <div class="vector-actions">
+          <button class="vector-toggle" id="vector-toggle" type="button" aria-pressed="false" title="Afficher ou masquer les flèches des données de grille">
+            <span class="vector-icon" aria-hidden="true">↗</span>
+            <span>Vecteurs</span>
+            <span class="toggle-state">INACTIFS</span>
+          </button>
+          <button class="vector-toggle" id="propagate-toggle" type="button" aria-pressed="false" title="Interpoler le champ de vecteurs entre les points de grille" disabled>
+            <span>Propager</span>
+            <span class="toggle-state">INACTIF</span>
+          </button>
+        </div>
+        <button class="estimate-toggle" id="estimate-toggle" type="button" aria-pressed="false">
+          Estimation au clic <span id="estimate-state">DÉSACTIVÉE</span>
+        </button>
+        <div class="map-legend" id="map-legend"><span class="legend-dot calm"></span><span>Calme</span><span class="legend-dot moderate"></span><span>Modéré</span><span class="legend-dot rough"></span><span>Soutenu</span></div>
+        <p class="map-hint">Touchez la carte pour choisir un point</p>
+      </aside>
+
+      <div class="map-actions" aria-label="Commandes de la carte">
+        <button class="icon-button zoom-button" id="zoom-in" type="button" aria-label="Zoom avant">+</button>
+        <button class="icon-button zoom-button" id="zoom-out" type="button" aria-label="Zoom arrière">−</button>
+      </div>
+
+      <section class="sheet glass" id="detail-sheet" aria-label="Conditions au point sélectionné" aria-live="polite">
+        <div class="sheet-handle" aria-hidden="true"><span></span></div>
+        <div class="sheet-empty" id="empty-state">
+          <span class="empty-icon" aria-hidden="true">⌖</span>
+          <div><strong>Choisissez un point en mer</strong><p>Les conditions et les prévisions s’afficheront ici.</p></div>
+        </div>
+        <div class="sheet-content is-hidden" id="point-details">
+          <div class="point-heading">
+            <div>
+              <span class="eyebrow" id="point-region">POINT MARIN</span>
+              <h1 id="point-name">—</h1>
+              <p id="point-coordinates">—</p>
+            </div>
+            <button class="icon-button close-button" id="clear-selection" type="button" aria-label="Fermer les détails">×</button>
+          </div>
+          <div class="metric-grid" id="metric-grid"></div>
+          <div class="assessment" id="assessment"></div>
+          <div class="trend-section">
+            <div class="trend-section-heading">
+              <strong>Prévisions au point choisi</strong>
+              <span>Prochaines 48 h · une valeur par heure</span>
+            </div>
+            <div class="trend-grid">
+              <article class="trend-card">
+                <div class="trend-card-heading"><strong>Température de l’eau</strong><span class="trend-current" id="trend-water-value">n/d</span></div>
+                <canvas class="trend-chart" id="chart-water" aria-label="Température de l’eau, unités degrés Celsius, sur les 48 prochaines heures"></canvas>
+              </article>
+              <article class="trend-card">
+                <div class="trend-card-heading"><strong>Hauteur des vagues</strong><span class="trend-current" id="trend-waves-value">n/d</span></div>
+                <canvas class="trend-chart" id="chart-waves" aria-label="Hauteur des vagues, en mètres, sur les 48 prochaines heures"></canvas>
+              </article>
+              <article class="trend-card">
+                <div class="trend-card-heading"><strong>Vitesse du courant</strong><span class="trend-current" id="trend-current-value">n/d</span></div>
+                <canvas class="trend-chart" id="chart-current" aria-label="Vitesse du courant, en nœuds, sur les 48 prochaines heures"></canvas>
+              </article>
+            </div>
+          </div>
+          <p class="estimate-note is-hidden" id="estimate-note"></p>
+          <p class="source-note">Visibilité : estimation indicative déduite du vent et de l’état de mer, pas une mesure.</p>
+        </div>
+      </section>
+
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </main>
+
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+    <script src="./config.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
