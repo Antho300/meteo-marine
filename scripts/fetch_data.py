@@ -284,6 +284,7 @@ def main() -> int:
     session = make_session()
     timeline: list[str] = []
     output_points: list[dict[str, Any]] = []
+    failed_batches: list[int] = []
     for point in points:
         output_points.append(
             {
@@ -301,11 +302,54 @@ def main() -> int:
         batch_targets = output_points[start : start + CHUNK_SIZE]
         weather = fetch_batch(session, WEATHER_URL, batch_points, WEATHER_FIELDS)
         marine = fetch_batch(session, MARINE_URL, batch_points, MARINE_FIELDS)
+        if weather is None or marine is None:
+            failed_batches.append(start // CHUNK_SIZE + 1)
+            LOGGER.error(
+                "Skipping forecast publication: batch %d/%d did not return both sources.",
+                start // CHUNK_SIZE + 1,
+                math.ceil(len(points) / CHUNK_SIZE),
+            )
+            continue
+
+        sources = ((weather, WEATHER_FIELDS), (marine, MARINE_FIELDS))
+        has_hourly_timeline = all(
+            all(
+                isinstance(location, dict)
+                and isinstance(location.get("hourly"), dict)
+                and isinstance(location["hourly"].get("time"), list)
+                for location in responses
+            )
+            for responses, _ in sources
+        )
+        has_values_for_each_source = all(
+            any(
+                isinstance(location, dict)
+                and isinstance(location.get("hourly"), dict)
+                and any(
+                    isinstance(location["hourly"].get(field), list)
+                    and any(
+                        isinstance(value, (int, float)) and math.isfinite(value)
+                        for value in location["hourly"][field]
+                    )
+                    for field in fields
+                )
+                for location in responses
+            )
+            for responses, fields in sources
+        )
+        if not has_hourly_timeline or not has_values_for_each_source:
+            failed_batches.append(start // CHUNK_SIZE + 1)
+            LOGGER.error(
+                "Skipping forecast publication: batch %d/%d has an invalid response or a location without forecast values.",
+                start // CHUNK_SIZE + 1,
+                math.ceil(len(points) / CHUNK_SIZE),
+            )
+            continue
 
         for index, target in enumerate(batch_targets):
             for response_data, fields in (
-                ((weather[index] if weather else None), WEATHER_FIELDS),
-                ((marine[index] if marine else None), MARINE_FIELDS),
+                (weather[index], WEATHER_FIELDS),
+                (marine[index], MARINE_FIELDS),
             ):
                 if not isinstance(response_data, dict):
                     continue
@@ -331,6 +375,13 @@ def main() -> int:
             "ok" if weather else "missing",
             "ok" if marine else "missing",
         )
+
+    if failed_batches:
+        LOGGER.error(
+            "Refusing to replace existing forecast: incomplete batches %s.",
+            ", ".join(str(batch) for batch in failed_batches),
+        )
+        return 1
 
     if not timeline:
         LOGGER.error("No hourly forecast was received; refusing to replace existing data.")

@@ -29,6 +29,8 @@ Les valeurs Open-Meteo sont écrites dans `data/forecast.json`. Le vent et le co
 
 La grille, d’environ 150 à 240 positions, est indicative. L’interpolation au clic et la propagation des vecteurs lissent les valeurs entre points : elles ne tiennent pas compte précisément du trait de côte ni des obstacles sous-marins.
 
+Le collecteur vérifie maintenant que les deux API répondent pour chacun des lots et renvoie un code d’erreur au moindre lot incomplet, sans remplacer le JSON déjà publié. Après avoir envoyé une modification du collecteur, vous pouvez relancer **Mettre à jour les prévisions marines** depuis l’onglet **Actions** du dépôt GitHub pour régénérer immédiatement les données.
+
 La bathymétrie et la profondeur ponctuelle sont fournies par le WMS EMODnet Bathymetry. Les couches utilisées sont `emodnet:mean` (profondeur) et `emodnet:contours` (isobathes). La profondeur demandée au point estimé correspond aux coordonnées cliquées ; si elle n’est pas accessible, l’interface affiche `n/d`.
 
 `sea_level_height_msl` est une hauteur par rapport au niveau moyen de la mer, et non une prédiction de marée portuaire. Le projet pourra accueillir ultérieurement une source de marée telle que le SHOM, sous réserve de ses conditions d’accès et de licence.
