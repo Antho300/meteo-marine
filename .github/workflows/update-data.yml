@@ -2,7 +2,7 @@ name: Mettre à jour les prévisions marines
 
 on:
   schedule:
-    - cron: "0 */3 * * *"
+    - cron: "0 * * * *"
   workflow_dispatch:
 
 permissions:

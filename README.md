@@ -9,6 +9,7 @@ L’application est statique : HTML, CSS et JavaScript natifs, sans serveur appl
 ## Fonctionnalités
 
 - Carte interactive plein écran, adaptée au mobile, avec points de grille cliquables.
+- Géolocalisation facultative depuis le bouton de l’en-tête : centre la carte sur la position et affiche un repère avec les coordonnées. La position n’est utilisée que dans le navigateur.
 - Page d’accueil avec accès aux cartes France (Manche, Atlantique, Méditerranée et Corse) et Mer Rouge (secteur des côtes égyptiennes).
 - Couches météo pour le vent, les vagues, la température de l’eau, les courants et la bathymétrie.
 - Menu des contrôles repliable et commandes de carte espacées pour faciliter l’usage sur mobile.
@@ -30,7 +31,7 @@ Le collecteur `scripts/fetch_data.py` interroge les API Open-Meteo par lots de c
 - **Forecast API** : `wind_speed_10m`, `wind_gusts_10m`, `wind_direction_10m` et `pressure_msl`.
 - **Marine API** : `wave_height`, `wave_period`, `wave_direction`, `swell_wave_height`, `swell_wave_period`, `swell_wave_direction`, `sea_surface_temperature`, `ocean_current_velocity`, `ocean_current_direction` et `sea_level_height_msl`.
 
-Les valeurs France sont écrites dans `data/forecast.json` et celles de la Mer Rouge dans `data/forecast.red-sea.json`. Les données de la Mer Rouge sont collectées autour des côtes égyptiennes et utilisent le fuseau `Africa/Cairo`. Le vent et le courant sont fournis en km/h et convertis en nœuds dans l’interface ; les vagues et le niveau marin sont en mètres, les périodes en secondes et la température en degrés Celsius. Certaines variables marines peuvent être absentes, notamment près des terres ou hors de la couverture du modèle.
+Les valeurs France sont écrites dans `data/forecast.json` et celles de la Mer Rouge dans `data/forecast.red-sea.json`. Les données de la Mer Rouge sont collectées autour des côtes égyptiennes et utilisent le fuseau `Africa/Cairo` ; la France utilise `Europe/Paris`. Les heures des prévisions et leur affichage suivent le fuseau local de la zone, indépendamment du fuseau configuré sur l’appareil. L’heure de collecte (`updated_at`) est enregistrée en UTC, puis affichée dans le fuseau local de la zone avec son décalage UTC. Le vent et le courant sont fournis en km/h et convertis en nœuds dans l’interface ; les vagues et le niveau marin sont en mètres, les périodes en secondes et la température en degrés Celsius. Certaines variables marines peuvent être absentes, notamment près des terres ou hors de la couverture du modèle.
 
 La grille est composée de positions de prévision du modèle, pas de stations météo ou de bouées de mesure. Elle est indicative : l’interpolation au clic et la propagation des vecteurs lissent les valeurs entre points et ne tiennent pas précisément compte du trait de côte ni des obstacles sous-marins. Pour la Mer Rouge, les positions sans aucune variable marine sur les cinq jours ne sont pas affichées ; une donnée manquante seulement à certaines heures reste affichée en gris pour l’heure sélectionnée, sans modifier les autres heures ni les autres points.
 
@@ -52,7 +53,7 @@ La bathymétrie et la profondeur ponctuelle en France sont fournies par le WMS E
 .
 ├── .github/
 │   └── workflows/
-│       └── update-data.yml   # collecte planifiée toutes les trois heures
+│       └── update-data.yml   # collecte planifiée toutes les heures
 ├── data/
 │   ├── forecast.example.json # exemple de format, données fictives
 │   ├── forecast.json         # prévisions France
@@ -146,7 +147,7 @@ GitHub Pages est le choix le plus direct pour ce site statique.
 
 ### Activer la collecte automatique des données
 
-Le workflow `.github/workflows/update-data.yml` récupère les prévisions toutes les trois heures et peut aussi être lancé manuellement.
+Le workflow `.github/workflows/update-data.yml` récupère les prévisions toutes les heures, à la minute 0 (UTC), et peut aussi être lancé manuellement. GitHub peut retarder le démarrage du workflow ; les données ne changent sur le site qu’après la fin de la collecte et la publication des fichiers JSON.
 
 1. Dans le dépôt, ouvrez **Settings → Actions → General**.
 2. À **Workflow permissions**, sélectionnez **Read and write permissions**, puis enregistrez.
@@ -154,6 +155,8 @@ Le workflow `.github/workflows/update-data.yml` récupère les prévisions toute
 4. Vérifiez que l’exécution réussit et que `data/forecast.json` et `data/forecast.red-sea.json` sont présents dans le dépôt. Les prochaines exécutions sont planifiées automatiquement ; GitHub peut décaler leur démarrage.
 
 Chaque collecte réussie met à jour les deux fichiers JSON et crée un commit automatique. Le site lit ces fichiers avec des chemins relatifs, ce qui fonctionne aussi pour une publication GitHub Pages à l’adresse d’un dépôt.
+
+Quand l’application est ouverte, elle recharge automatiquement les données publiées toutes les heures. Ce rafraîchissement récupère les derniers fichiers déjà publiés ; la collecte elle-même est exécutée par GitHub Actions.
 
 ## Autre hébergement gratuit : Cloudflare Pages
 
@@ -173,4 +176,4 @@ Vous pouvez utiliser GitHub Pages **ou** Cloudflare Pages ; il n’est pas néce
 - Pour ajouter une variable Open-Meteo, mettez à jour `scripts/fetch_data.py`, conservez `null` lorsqu’une valeur manque, puis ajoutez son affichage dans `app.js`.
 - Décrivez la source, ses unités et ses limites de couverture dans cette documentation.
 
-Les prévisions sont enregistrées avec le fuseau `Europe/Paris` et au format JSON compact.
+Les prévisions sont enregistrées en JSON compact, avec les heures locales de chaque zone et le fuseau correspondant indiqué dans le fichier.

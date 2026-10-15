@@ -23,6 +23,7 @@
   const BATHYMETRY_WMS = "https://ows.emodnet-bathymetry.eu/wms";
   const WEB_MERCATOR_HALF_WORLD = 20037508.342789244;
   const MAX_BATHYMETRY_ZOOM = 8;
+  const FORECAST_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
   const $ = (selector) => document.querySelector(selector);
   const elements = {
     updatedAt: $("#updated-at"),
@@ -35,7 +36,8 @@
     mapHint: $(".map-hint"),
     timeSlider: $("#time-slider"),
     timeLabel: $("#time-label"),
-    timeOffset: $("#time-offset"),
+    timeRangeStart: $("#time-range-start"),
+    timeRangeEnd: $("#time-range-end"),
     emptyState: $("#empty-state"),
     pointDetails: $("#point-details"),
     pointRegion: $("#point-region"),
@@ -81,7 +83,9 @@
   updateAppearanceButton();
 
   let forecast = null;
+  let forecastRefreshInProgress = false;
   let map = null;
+  let userLocationMarker = null;
   let selectedPoint = null;
   let selectedDistance = null;
   let vectorsEnabled = false;
@@ -1054,18 +1058,136 @@
 
   function formatChartTime(time) {
     if (typeof time !== "string") return "—";
-    const date = new Date(time);
-    return Number.isNaN(date.getTime())
-      ? formatHour(time)
-      : new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
+    const date = parseForecastDate(time);
+    if (!date) return formatHour(time);
+    const dateLabel = formatForecastDate(time, {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+    return `${dateLabel} ${formatTimezoneOffset(date, getForecastTimezone())}`;
   }
 
   function formatHour(time) {
     if (typeof time !== "string") return "—";
-    const date = new Date(time);
-    return Number.isNaN(date.getTime())
-      ? time.slice(11, 16)
-      : new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(date);
+    return formatForecastDate(time, { hour: "2-digit", minute: "2-digit" }) || time.slice(11, 16);
+  }
+
+  function getForecastTimezone() {
+    return forecast?.timezone || regionConfig.timezone;
+  }
+
+  function getForecastTimeParts(value) {
+    const match = typeof value === "string"
+      ? value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/)
+      : null;
+    if (!match) return null;
+    return {
+      year: Number(match[1]),
+      month: Number(match[2]),
+      day: Number(match[3]),
+      hour: Number(match[4]),
+      minute: Number(match[5]),
+      second: Number(match[6] || 0)
+    };
+  }
+
+  function parseForecastDate(value) {
+    if (typeof value !== "string") return null;
+    const parts = getForecastTimeParts(value);
+    if (!parts) {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+    const targetTime = Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hour,
+      parts.minute,
+      parts.second
+    );
+    const timezone = getForecastTimezone();
+    const formatter = new Intl.DateTimeFormat("en", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23"
+    });
+    let timestamp = targetTime;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const zonedParts = Object.fromEntries(
+        formatter.formatToParts(new Date(timestamp))
+          .filter((part) => part.type !== "literal")
+          .map((part) => [part.type, Number(part.value)])
+      );
+      const zonedAsUtc = Date.UTC(
+        zonedParts.year,
+        zonedParts.month - 1,
+        zonedParts.day,
+        zonedParts.hour,
+        zonedParts.minute,
+        zonedParts.second
+      );
+      const nextTimestamp = targetTime - (zonedAsUtc - timestamp);
+      if (nextTimestamp === timestamp) break;
+      timestamp = nextTimestamp;
+    }
+    return new Date(timestamp);
+  }
+
+  function formatForecastDate(value, options) {
+    const parts = getForecastTimeParts(value);
+    const date = parts
+      ? new Date(Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second))
+      : parseForecastDate(value);
+    if (!date) return null;
+    return new Intl.DateTimeFormat("fr-FR", {
+      ...options,
+      timeZone: parts ? "UTC" : getForecastTimezone(),
+      hourCycle: "h23"
+    }).format(date);
+  }
+
+  function formatTimezoneOffset(date, timezone) {
+    const name = new Intl.DateTimeFormat("en", {
+      timeZone: timezone,
+      timeZoneName: "shortOffset"
+    }).formatToParts(date).find((part) => part.type === "timeZoneName")?.value;
+    return name ? name.replace(/^GMT/, "UTC") : "UTC";
+  }
+
+  function formatRangeDate(time) {
+    const date = parseForecastDate(time);
+    if (!date) return "—";
+    const formatted = formatForecastDate(time, {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    }).replace(":", "h");
+    return `${formatted} ${formatTimezoneOffset(date, getForecastTimezone())}`;
+  }
+
+  function getLocalForecastTimeKey() {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: getForecastTimezone(),
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(new Date());
+    const values = Object.fromEntries(
+      parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value])
+    );
+    return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
   }
 
   function renderPoint(point, distance = null) {
@@ -1213,22 +1335,31 @@
     const time = forecast?.hours[index];
     if (typeof time !== "string") {
       elements.timeLabel.textContent = "—";
-      elements.timeOffset.textContent = "Prévision indisponible";
+      elements.timeRangeStart.textContent = "—";
+      elements.timeRangeEnd.textContent = "—";
       return;
     }
-    const date = new Date(time);
-    elements.timeLabel.textContent = Number.isNaN(date.getTime())
-      ? time
-      : new Intl.DateTimeFormat("fr-FR", {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit"
-      }).format(date);
-    const firstDate = new Date(forecast.hours[0]);
-    const differenceHours = Math.round((date.getTime() - firstDate.getTime()) / 3600000);
-    elements.timeOffset.textContent = differenceHours <= 0 ? "Début de prévision" : `+ ${differenceHours} h`;
+    const date = parseForecastDate(time);
+    elements.timeLabel.textContent = date
+      ? `${formatForecastDate(time, {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit"
+        })} ${formatTimezoneOffset(date, getForecastTimezone())}`
+      : time;
+    const localTimezoneLabel = `Heure locale (${formatTimezoneOffset(date, getForecastTimezone())})`;
+    elements.timeLabel.title = localTimezoneLabel;
+    elements.timeSlider.setAttribute("aria-label", `Heure de prévision, ${localTimezoneLabel}`);
+    elements.timeRangeStart.textContent = formatRangeDate(forecast.hours[0]);
+    elements.timeRangeEnd.textContent = formatRangeDate(forecast.hours[forecast.hours.length - 1]);
+    elements.timeRangeStart.title = localTimezoneLabel;
+    elements.timeRangeEnd.title = localTimezoneLabel;
+    const trendTimezone = $("#trend-timezone");
+    if (trendTimezone) {
+      trendTimezone.textContent = `48 h · heure locale · survolez ou cliquez sur une courbe`;
+    }
   }
 
   function updateCompass() {
@@ -1238,6 +1369,47 @@
     elements.compass.style.setProperty("--compass-bearing", `${bearing}deg`);
     elements.compassHeading.textContent = `${String(roundedBearing).padStart(3, "0")}°`;
     elements.compass.setAttribute("aria-label", `Boussole, cap ${roundedBearing} degrés`);
+  }
+
+  function displayUserLocation(coords) {
+    const longitude = coords.longitude;
+    const latitude = coords.latitude;
+    const locationText = `${Math.abs(latitude).toFixed(5)}° ${latitude >= 0 ? "N" : "S"}, ${Math.abs(longitude).toFixed(5)}° ${longitude >= 0 ? "E" : "O"}`;
+    let markerElement;
+    let popup;
+    if (!userLocationMarker) {
+      markerElement = document.createElement("button");
+      markerElement.className = "user-location-marker";
+      markerElement.type = "button";
+      markerElement.setAttribute("aria-label", "Votre position sur la carte");
+      markerElement.title = "Votre position";
+      popup = new maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 16,
+        className: "user-location-popup"
+      });
+      userLocationMarker = new maplibregl.Marker({ element: markerElement, anchor: "center" })
+        .setPopup(popup)
+        .setLngLat([longitude, latitude])
+        .addTo(map);
+      userLocationMarker.togglePopup();
+    } else {
+      userLocationMarker.setLngLat([longitude, latitude]);
+      popup = userLocationMarker.getPopup();
+    }
+    const popupContent = document.createElement("div");
+    const popupTitle = document.createElement("strong");
+    popupTitle.textContent = "Votre position";
+    const popupCoordinates = document.createElement("span");
+    popupCoordinates.textContent = locationText;
+    popupContent.append(popupTitle, popupCoordinates);
+    popup.setDOMContent(popupContent);
+    map.flyTo({
+      center: [longitude, latitude],
+      zoom: Math.max(map.getZoom(), 8)
+    });
+    showToast(`Votre position : ${locationText}`);
   }
 
   function refreshViewVectors() {
@@ -1430,7 +1602,7 @@
       }
       navigator.geolocation.getCurrentPosition(
         ({ coords }) => {
-          map.flyTo({ center: [coords.longitude, coords.latitude], zoom: Math.max(map.getZoom(), 8) });
+          displayUserLocation(coords);
         },
         (error) => showToast(error.code === error.PERMISSION_DENIED ? "Autorisez la géolocalisation dans votre navigateur." : "Position indisponible."),
         { enableHighAccuracy: true, timeout: 10000 }
@@ -1448,14 +1620,27 @@
       hour: "2-digit",
       minute: "2-digit",
       timeZone: forecast?.timezone || "Europe/Paris"
-    }).format(date)}`;
+    }).format(date)} ${formatTimezoneOffset(date, getForecastTimezone())}`;
   }
 
   async function loadForecast() {
+    const previousSelection = selectedPoint
+      ? {
+          lat: selectedPoint.lat,
+          lon: selectedPoint.lon,
+          estimated: Boolean(selectedPoint.estimated),
+          distance: selectedDistance
+        }
+      : null;
+    const previousTime = forecast?.hours[Number(elements.timeSlider.value)];
     let isExample = false;
-    let response = await fetch(regionConfig.dataFile, { cache: "no-store" });
-    if (!response.ok && regionKey === "france") {
-      response = await fetch("./data/forecast.example.json", { cache: "no-store" });
+    const forecastUrl = new URL(regionConfig.dataFile, window.location.href);
+    forecastUrl.searchParams.set("_", String(Date.now()));
+    let response = await fetch(forecastUrl, { cache: "no-store" });
+    if (!response.ok && regionKey === "france" && !forecast) {
+      const exampleUrl = new URL("./data/forecast.example.json", window.location.href);
+      exampleUrl.searchParams.set("_", String(Date.now()));
+      response = await fetch(exampleUrl, { cache: "no-store" });
       isExample = true;
     }
     if (!response.ok) throw new Error(`Fichiers météo introuvables (HTTP ${response.status})`);
@@ -1467,15 +1652,44 @@
     elements.updatedAt.textContent = formatUpdatedAt(data.updated_at, isExample);
     elements.updatedAt.title = isExample
       ? "Le workflow GitHub Actions remplacera cet exemple après sa première exécution."
-      : `Dernière mise à jour : ${data.updated_at}`;
+      : `Dernière mise à jour enregistrée en UTC : ${data.updated_at}. Affichée en heure locale (${formatTimezoneOffset(new Date(data.updated_at), getForecastTimezone())}).`;
     elements.timeSlider.max = String(Math.max(0, data.hours.length - 1));
-    const now = Date.now();
-    const firstFutureHour = data.hours.findIndex((hour) => new Date(hour).getTime() >= now);
-    elements.timeSlider.value = String(firstFutureHour < 0 ? data.hours.length - 1 : firstFutureHour);
+    const localNow = getLocalForecastTimeKey();
+    const firstFutureHour = data.hours.findIndex((hour) => hour.slice(0, 16) >= localNow);
+    let selectedHour = firstFutureHour < 0 ? data.hours.length - 1 : firstFutureHour;
+    if (previousTime) {
+      const matchingHour = data.hours.indexOf(previousTime);
+      if (matchingHour >= 0) selectedHour = matchingHour;
+    }
+    elements.timeSlider.value = String(selectedHour);
     updateTimeLabel();
-    initializeMap();
+    if (map) paintMapData();
+    else initializeMap();
+    if (previousSelection) {
+      const refreshedSelection = previousSelection.estimated
+        ? estimatePoint(previousSelection.lon, previousSelection.lat)
+          || nearestPoint(previousSelection.lon, previousSelection.lat)
+        : nearestPoint(previousSelection.lon, previousSelection.lat);
+      if (refreshedSelection) {
+        const distance = previousSelection.estimated ? refreshedSelection.distance : previousSelection.distance;
+        renderPoint(refreshedSelection.point, distance);
+      }
+    }
     if (isExample) {
       showToast("Mode aperçu : ces valeurs sont fictives. Lancez le workflow pour les remplacer.");
+    }
+  }
+
+  async function refreshForecast() {
+    if (forecastRefreshInProgress) return;
+    forecastRefreshInProgress = true;
+    try {
+      await loadForecast();
+    } catch (error) {
+      console.error("Impossible d’actualiser les prévisions marines.", error);
+      showToast(`Actualisation impossible : ${error.message}`);
+    } finally {
+      forecastRefreshInProgress = false;
     }
   }
 
@@ -1540,11 +1754,15 @@
 
   setupSheetResizing();
   setupControls();
-  loadForecast().catch((error) => {
-    console.error("Impossible de charger les prévisions marines.", error);
-    elements.updatedAt.textContent = "Données indisponibles";
-    elements.emptyState.querySelector("strong").textContent = "Impossible de charger les données";
-    elements.emptyState.querySelector("p").textContent = "Servez le projet en HTTP local ou vérifiez data/forecast.json.";
-    showToast(error.message);
-  });
+  loadForecast()
+    .then(() => {
+      window.setInterval(() => void refreshForecast(), FORECAST_REFRESH_INTERVAL_MS);
+    })
+    .catch((error) => {
+      console.error("Impossible de charger les prévisions marines.", error);
+      elements.updatedAt.textContent = "Données indisponibles";
+      elements.emptyState.querySelector("strong").textContent = "Impossible de charger les données";
+      elements.emptyState.querySelector("p").textContent = "Servez le projet en HTTP local ou vérifiez data/forecast.json.";
+      showToast(error.message);
+    });
 })();

@@ -71,10 +71,12 @@
         <section class="time-control" aria-label="Prévision dans le temps">
           <div class="time-heading">
             <div><span class="eyebrow">PRÉVISION</span><strong id="time-label">—</strong></div>
-            <span class="time-offset" id="time-offset">Maintenant</span>
           </div>
           <input id="time-slider" type="range" min="0" max="119" value="0" aria-label="Heure de prévision">
-          <div class="time-range"><span>Maintenant</span><span>+ 5 jours</span></div>
+          <div class="time-range">
+            <span id="time-range-start">—</span>
+            <span id="time-range-end">—</span>
+          </div>
         </section>
         <div class="header-status">
           <span class="live-dot"></span>
@@ -154,7 +156,7 @@
           <div class="trend-section">
             <div class="trend-section-heading">
               <strong>Prévisions au point choisi</strong>
-              <span>48 h · survolez ou cliquez sur une courbe</span>
+              <span id="trend-timezone">48 h · heure locale · survolez ou cliquez sur une courbe</span>
             </div>
             <div class="trend-grid">
               <article class="trend-card">
