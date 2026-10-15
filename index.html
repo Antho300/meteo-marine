@@ -42,9 +42,50 @@
             <span class="area-card-arrow" aria-hidden="true">→</span>
           </a>
         </nav>
+        <details class="home-data-info">
+          <summary><span class="home-info-icon" aria-hidden="true">i</span>Comprendre les prévisions et les points</summary>
+          <div class="home-data-info-content">
+            <p>Les points de la carte ne sont pas des bouées ni des stations météo : ce sont des positions de grille utilisées pour afficher des <strong>prévisions calculées par des modèles</strong>.</p>
+            <h2 class="home-info-section-title">Quelle source fournit quelle donnée&nbsp;?</h2>
+            <div class="data-sources">
+              <section class="data-source-card">
+                <h3><a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener noreferrer">Open-Meteo Forecast</a></h3>
+                <p>Vent (vitesse et direction), rafales et pression atmosphérique.</p>
+              </section>
+              <section class="data-source-card">
+                <h3><a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener noreferrer">Open-Meteo Marine</a></h3>
+                <p>Vagues et houle (hauteur, période et direction), température de l’eau, courants (vitesse et direction) et niveau marin.</p>
+              </section>
+              <section class="data-source-card">
+                <h3><a href="https://emodnet.ec.europa.eu/en/bathymetry" target="_blank" rel="noopener noreferrer">EMODnet Bathymetry</a></h3>
+                <p>Profondeur des fonds et isobathes, uniquement pour la zone France.</p>
+              </section>
+            </div>
+            <p>Pour une même position affichée, les API Forecast et Marine cherchent chacune leur point de grille le plus proche : les deux calculs peuvent donc être décalés différemment. Voici les écarts observés :</p>
+            <div class="grid-offsets" aria-label="Écarts entre les positions affichées et les points de calcul des modèles">
+              <section class="grid-offset-region" aria-labelledby="offset-france-title">
+                <h2 id="offset-france-title">France <span>240 points</span></h2>
+                <dl>
+                  <div><dt>Forecast · météo</dt><dd>1 km en moyenne · jusqu’à 12,46 km</dd></div>
+                  <div><dt>Marine · état de la mer</dt><dd>3,72 km en moyenne · jusqu’à 10,28 km</dd></div>
+                </dl>
+                <a href="./data/coordinates.france.csv">Voir l’audit des coordonnées France</a>
+              </section>
+              <section class="grid-offset-region" aria-labelledby="offset-red-sea-title">
+                <h2 id="offset-red-sea-title">Mer Rouge <span>212 points</span></h2>
+                <dl>
+                  <div><dt>Forecast · météo</dt><dd>2,84 km en moyenne · jusqu’à 10,64 km</dd></div>
+                  <div><dt>Marine · état de la mer</dt><dd>3,85 km en moyenne · jusqu’à 17,95 km</dd></div>
+                </dl>
+                <a href="./data/coordinates.red-sea.csv">Voir l’audit des coordonnées Mer Rouge</a>
+              </section>
+            </div>
+            <p class="home-data-caveat">Ces distances décrivent le décalage entre les points de calcul des modèles et les points affichés. Elles ne mesurent pas l’erreur des prévisions par rapport aux conditions réelles ; les données ne sont pas des mesures de stations.</p>
+          </div>
+        </details>
         <p class="home-footnote">Les données sont indicatives et peuvent varier selon la zone et le modèle disponible.</p>
       </section>
-      <footer class="home-footer">Météo marine personnelle · Données <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a></footer>
+      <footer class="home-footer">Météo marine personnelle · Prévisions indicatives</footer>
     </main>
 
     <main class="app-shell" hidden>

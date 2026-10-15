@@ -1585,14 +1585,10 @@
       const vertical = event.shiftKey ? event.deltaX : event.deltaY;
       map.panBy([horizontal, vertical], { duration: 0 });
     }, { passive: false });
-    map.addControl(new maplibregl.AttributionControl({
-      compact: true,
-      customAttribution: "Données météo © <a href=\"https://open-meteo.com/\" target=\"_blank\" rel=\"noopener noreferrer\">Open-Meteo</a> · Bathymétrie © EMODnet Bathymetry"
-    }), "bottom-right");
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     const attributionControl = map.getContainer().querySelector(".maplibregl-ctrl-bottom-right");
     if (attributionControl) {
       document.querySelector(".app-shell").append(attributionControl);
-      attributionControl.querySelector(".maplibregl-ctrl-attrib-button")?.click();
     }
     addMapEvents();
     $("#locate-button").addEventListener("click", () => {
