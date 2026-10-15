@@ -154,20 +154,24 @@
           <div class="trend-section">
             <div class="trend-section-heading">
               <strong>Prévisions au point choisi</strong>
-              <span>Prochaines 48 h · une valeur par heure</span>
+              <span>48 h · survolez ou cliquez sur une courbe</span>
             </div>
             <div class="trend-grid">
               <article class="trend-card">
+                <div class="trend-card-heading"><strong>Vitesse du vent</strong><span class="trend-current" id="trend-wind-value">n/d</span></div>
+                <canvas class="trend-chart" id="chart-wind" tabindex="0" aria-label="Vitesse du vent, en nœuds, sur les 48 prochaines heures. Utilisez les flèches pour parcourir les valeurs."></canvas>
+              </article>
+              <article class="trend-card">
                 <div class="trend-card-heading"><strong>Température de l’eau</strong><span class="trend-current" id="trend-water-value">n/d</span></div>
-                <canvas class="trend-chart" id="chart-water" aria-label="Température de l’eau, unités degrés Celsius, sur les 48 prochaines heures"></canvas>
+                <canvas class="trend-chart" id="chart-water" tabindex="0" aria-label="Température de l’eau, unités degrés Celsius, sur les 48 prochaines heures. Utilisez les flèches pour parcourir les valeurs."></canvas>
               </article>
               <article class="trend-card">
                 <div class="trend-card-heading"><strong>Hauteur des vagues</strong><span class="trend-current" id="trend-waves-value">n/d</span></div>
-                <canvas class="trend-chart" id="chart-waves" aria-label="Hauteur des vagues, en mètres, sur les 48 prochaines heures"></canvas>
+                <canvas class="trend-chart" id="chart-waves" tabindex="0" aria-label="Hauteur des vagues, en mètres, sur les 48 prochaines heures. Utilisez les flèches pour parcourir les valeurs."></canvas>
               </article>
               <article class="trend-card">
                 <div class="trend-card-heading"><strong>Vitesse du courant</strong><span class="trend-current" id="trend-current-value">n/d</span></div>
-                <canvas class="trend-chart" id="chart-current" aria-label="Vitesse du courant, en nœuds, sur les 48 prochaines heures"></canvas>
+                <canvas class="trend-chart" id="chart-current" tabindex="0" aria-label="Vitesse du courant, en nœuds, sur les 48 prochaines heures. Utilisez les flèches pour parcourir les valeurs."></canvas>
               </article>
             </div>
           </div>

@@ -216,13 +216,14 @@ button { color: inherit; }
 .trend-section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .trend-section-heading strong { font-size: 11px; }
 .trend-section-heading span { color: var(--muted); font-size: 9px; }
-.trend-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.trend-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
 .trend-card { min-width: 0; padding: 8px 9px 4px; border: 1px solid var(--line); border-radius: 11px; background: rgba(37, 57, 61, .88); }
 .app-shell.theme-light .trend-card { background: rgba(248, 250, 249, .7); }
 .trend-card-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; }
 .trend-card-heading strong { overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .trend-current { color: var(--ink); font-size: 10px; font-weight: 750; white-space: nowrap; }
-.trend-chart { display: block; width: 100%; height: 112px; margin-top: 4px; }
+.trend-chart { display: block; width: 100%; height: 112px; margin-top: 4px; cursor: crosshair; touch-action: pan-y; }
+.trend-chart:focus-visible { outline: 2px solid var(--sea); outline-offset: 2px; }
 .source-note { font-size: 9px; color: var(--muted); margin: 8px 1px 0; }
 .estimate-note { color: #f5cd83; font-size: 9px; margin: 7px 1px 0; }
 .app-shell.theme-light .estimate-note { color: #9b5c0b; }
@@ -249,6 +250,7 @@ button { color: inherit; }
   .time-control { min-width: 180px; }
   .header-status { max-width: 105px; overflow: hidden; font-size: 9px; }
   .icon-button { width: 34px; height: 34px; }
+  .trend-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 640px) {

@@ -45,9 +45,11 @@
     assessment: $("#assessment"),
     compass: $("#map-compass"),
     compassHeading: $("#compass-heading"),
+    chartWind: $("#chart-wind"),
     chartWater: $("#chart-water"),
     chartWaves: $("#chart-waves"),
     chartCurrent: $("#chart-current"),
+    chartWindValue: $("#trend-wind-value"),
     chartWaterValue: $("#trend-water-value"),
     chartWavesValue: $("#trend-waves-value"),
     chartCurrentValue: $("#trend-current-value"),
@@ -95,6 +97,7 @@
   const bathymetryTiles = new Map();
   const failedBathymetryTiles = new Map();
   const depthCache = new Map();
+  const chartInteractionStates = new WeakMap();
   const POINT_SOURCE_ID = "weather-grid";
   const POINT_LAYER_ID = "weather-grid-circles";
   const VECTOR_SOURCE_ID = "weather-vectors";
@@ -785,6 +788,15 @@
     const currentIndex = Number(elements.timeSlider.value);
     const definitions = [
       {
+        canvas: elements.chartWind,
+        value: elements.chartWindValue,
+        field: "wind_speed_10m",
+        unit: "nd",
+        color: "#62b9b3",
+        lightColor: "#187b83",
+        convert: (value) => value * KNOTS_PER_KMH
+      },
+      {
         canvas: elements.chartWater,
         value: elements.chartWaterValue,
         field: "sea_surface_temperature",
@@ -820,12 +832,94 @@
   }
 
   function renderTrendChart(canvas, point, series, firstHour) {
+    let state = chartInteractionStates.get(canvas);
+    if (!state) {
+      state = {
+        activeIndex: null,
+        pinned: false,
+        baseAriaLabel: canvas.getAttribute("aria-label") || ""
+      };
+      chartInteractionStates.set(canvas, state);
+      canvas.addEventListener("pointermove", (event) => {
+        if (state.pinned) return;
+        const index = chartIndexAtPointer(canvas, state, event);
+        if (index !== state.activeIndex) {
+          state.activeIndex = index;
+          state.draw();
+        }
+      });
+      canvas.addEventListener("pointerleave", () => {
+        if (!state.pinned) {
+          state.activeIndex = null;
+          state.draw();
+        }
+      });
+      canvas.addEventListener("click", (event) => {
+        const index = chartIndexAtPointer(canvas, state, event);
+        state.pinned = state.pinned && state.activeIndex === index ? false : true;
+        state.activeIndex = index;
+        state.draw();
+      });
+      canvas.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+          event.preventDefault();
+          const step = event.key === "ArrowRight" ? 1 : -1;
+          let next = state.activeIndex === null ? 0 : state.activeIndex + step;
+          while (next >= 0 && next < state.values.length && !isNumber(state.values[next])) {
+            next += step;
+          }
+          if (next >= 0 && next < state.values.length) {
+            state.activeIndex = next;
+            state.pinned = true;
+            state.draw();
+          }
+        } else if (event.key === "Enter" || event.key === " ") {
+          if (state.activeIndex !== null) {
+            event.preventDefault();
+            state.pinned = !state.pinned;
+            state.draw();
+          }
+        }
+      });
+    }
     const values = [];
     const endHour = Math.min(firstHour + 48, forecast.hours.length - 1);
     for (let index = firstHour; index <= endHour; index += 1) {
       const value = pointValue(point, series.field, index);
       values.push(isNumber(value) ? series.convert(value) : null);
     }
+    if ((state.point && state.point !== point) || (state.firstHour !== undefined && state.firstHour !== firstHour)) {
+      state.activeIndex = null;
+      state.pinned = false;
+    }
+    state.point = point;
+    state.series = series;
+    state.firstHour = firstHour;
+    state.values = values;
+    state.draw = () => drawTrendChart(canvas, state);
+    state.draw();
+  }
+
+  function chartIndexAtPointer(canvas, state, event) {
+    if (!state.values || !state.values.length || !state.plot) return null;
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const relativeIndex = Math.round((x - state.plot.left) / state.plot.width * (state.values.length - 1));
+    let closestIndex = null;
+    let closestDistance = Infinity;
+    state.values.forEach((value, index) => {
+      if (!isNumber(value)) return;
+      const distance = Math.abs(index - relativeIndex);
+      if (distance < closestDistance) {
+        closestIndex = index;
+        closestDistance = distance;
+      }
+    });
+    return closestIndex;
+  }
+
+  function drawTrendChart(canvas, state) {
+    const { values, series, firstHour } = state;
     const rect = canvas.getBoundingClientRect();
     const ratio = window.devicePixelRatio || 1;
     canvas.width = Math.max(1, Math.round(rect.width * ratio));
@@ -836,6 +930,10 @@
     context.clearRect(0, 0, rect.width, rect.height);
     const valid = values.filter(isNumber);
     if (!valid.length) {
+      state.plot = null;
+      state.activeIndex = null;
+      canvas.title = state.baseAriaLabel;
+      canvas.setAttribute("aria-label", state.baseAriaLabel);
       context.fillStyle = getComputedStyle(appShell).getPropertyValue("--muted");
       context.font = "12px system-ui";
       context.fillText("Prévision indisponible", 35, 32);
@@ -844,6 +942,7 @@
     const padding = { left: 38, right: 8, top: 14, bottom: 25 };
     const width = Math.max(1, rect.width - padding.left - padding.right);
     const height = Math.max(1, rect.height - padding.top - padding.bottom);
+    state.plot = { left: padding.left, width };
     const low = Math.min(...valid);
     const high = Math.max(...valid);
     const spread = high - low || Math.max(Math.abs(high) * 0.1, 1);
@@ -900,6 +999,65 @@
     context.lineCap = "round";
     context.lineJoin = "round";
     context.stroke();
+
+    if (state.activeIndex === null || !isNumber(values[state.activeIndex])) {
+      canvas.title = state.baseAriaLabel;
+      canvas.setAttribute("aria-label", state.baseAriaLabel);
+      return;
+    }
+    const selectedValue = values[state.activeIndex];
+    const selectedHour = firstHour + state.activeIndex;
+    const selectedTime = forecast.hours[selectedHour];
+    const x = xFor(state.activeIndex);
+    const y = yFor(selectedValue);
+    const timeLabel = formatChartTime(selectedTime);
+    const valueLabel = `${formatNumber(selectedValue)} ${series.unit}`;
+    canvas.title = `${timeLabel} · ${valueLabel}`;
+    canvas.setAttribute("aria-label", `${state.baseAriaLabel} Valeur sélectionnée : ${timeLabel}, ${valueLabel}.`);
+    context.save();
+    context.strokeStyle = appShell.classList.contains("theme-light") ? series.lightColor : series.color;
+    context.setLineDash([3, 3]);
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(x, padding.top);
+    context.lineTo(x, padding.top + height);
+    context.stroke();
+    context.setLineDash([]);
+    context.beginPath();
+    context.arc(x, y, 5, 0, Math.PI * 2);
+    context.fillStyle = themeStyles.getPropertyValue("--paper-solid");
+    context.fill();
+    context.lineWidth = 2;
+    context.stroke();
+    context.beginPath();
+    context.arc(x, y, 2.5, 0, Math.PI * 2);
+    context.fillStyle = context.strokeStyle;
+    context.fill();
+    context.font = "10px system-ui";
+    const tooltipWidth = Math.max(context.measureText(timeLabel).width, context.measureText(valueLabel).width) + 12;
+    const tooltipHeight = 32;
+    const tooltipX = Math.max(0, Math.min(rect.width - tooltipWidth, x + tooltipWidth + 8 > rect.width ? x - tooltipWidth - 8 : x + 8));
+    const tooltipY = Math.max(0, Math.min(rect.height - tooltipHeight, y - tooltipHeight - 7));
+    context.fillStyle = themeStyles.getPropertyValue("--paper-solid");
+    context.fillRect(tooltipX, tooltipY, tooltipWidth, tooltipHeight);
+    context.strokeStyle = themeStyles.getPropertyValue("--line");
+    context.lineWidth = 1;
+    context.strokeRect(tooltipX, tooltipY, tooltipWidth, tooltipHeight);
+    context.fillStyle = themeStyles.getPropertyValue("--ink");
+    context.textAlign = "left";
+    context.textBaseline = "top";
+    context.fillText(timeLabel, tooltipX + 6, tooltipY + 4);
+    context.font = "bold 10px system-ui";
+    context.fillText(valueLabel, tooltipX + 6, tooltipY + 17);
+    context.restore();
+  }
+
+  function formatChartTime(time) {
+    if (typeof time !== "string") return "—";
+    const date = new Date(time);
+    return Number.isNaN(date.getTime())
+      ? formatHour(time)
+      : new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
   }
 
   function formatHour(time) {
