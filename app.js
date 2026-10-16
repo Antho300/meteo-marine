@@ -1190,9 +1190,130 @@
     return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
   }
 
+  const FAVORITES_STORAGE_KEY = "marine-favorite-spots-v1";
+  const favoriteElements = {
+    name: $("#favorite-name"),
+    category: $("#favorite-category"),
+    select: $("#favorites-select"),
+    save: $("#save-favorite"),
+    open: $("#open-favorite"),
+    remove: $("#delete-favorite"),
+    count: $("#favorites-count")
+  };
+  let favoriteSpots = readFavoriteSpots();
+
+  function readFavoriteSpots() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || "[]");
+      return Array.isArray(saved) ? saved.filter((spot) =>
+        spot && typeof spot.id === "string" && typeof spot.name === "string"
+        && isNumber(spot.lat) && isNumber(spot.lon) && typeof spot.regionKey === "string"
+      ) : [];
+    } catch (error) {
+      console.warn("Impossible de lire les spots favoris.", error);
+      return [];
+    }
+  }
+
+  function persistFavoriteSpots() {
+    try {
+      localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favoriteSpots));
+      return true;
+    } catch (error) {
+      console.error("Impossible d’enregistrer les spots favoris.", error);
+      showToast("Enregistrement impossible : le navigateur bloque le stockage local.");
+      return false;
+    }
+  }
+
+  function refreshFavoriteControls() {
+    const previousId = favoriteElements.select.value;
+    favoriteElements.select.replaceChildren();
+    const available = favoriteSpots.filter((spot) => spot.regionKey === regionKey);
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = available.length ? "Choisir un spot…" : "Aucun spot dans cette zone";
+    favoriteElements.select.append(placeholder);
+    for (const spot of available) {
+      const option = document.createElement("option");
+      option.value = spot.id;
+      option.textContent = `${spot.category} · ${spot.name}`;
+      favoriteElements.select.append(option);
+    }
+    favoriteElements.count.textContent = String(favoriteSpots.length);
+    favoriteElements.select.value = available.some((spot) => spot.id === previousId) ? previousId : "";
+    const hasSelection = Boolean(favoriteElements.select.value);
+    favoriteElements.open.disabled = !hasSelection;
+    favoriteElements.remove.disabled = !hasSelection;
+    favoriteElements.save.disabled = !selectedPoint;
+  }
+
+  function saveSelectedFavorite() {
+    if (!selectedPoint) {
+      showToast("Choisis d’abord un point sur la carte.");
+      return;
+    }
+    const name = favoriteElements.name.value.trim();
+    if (!name) {
+      favoriteElements.name.focus();
+      showToast("Donne un nom à ton spot avant de l’enregistrer.");
+      return;
+    }
+    const existing = favoriteSpots.find((spot) => spot.regionKey === regionKey
+      && spot.name.toLocaleLowerCase("fr") === name.toLocaleLowerCase("fr"));
+    const spot = {
+      id: existing?.id || (window.crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`),
+      name, category: favoriteElements.category.value, lat: selectedPoint.lat, lon: selectedPoint.lon,
+      regionKey, regionLabel: regionConfig.label, createdAt: existing?.createdAt || new Date().toISOString()
+    };
+    if (existing) favoriteSpots = favoriteSpots.map((item) => item.id === existing.id ? spot : item);
+    else favoriteSpots.push(spot);
+    if (!persistFavoriteSpots()) return;
+    refreshFavoriteControls();
+    favoriteElements.select.value = spot.id;
+    favoriteElements.name.value = "";
+    showToast(existing ? `Spot « ${name} » mis à jour.` : `Spot « ${name} » ajouté aux favoris.`);
+  }
+
+  function openSelectedFavorite() {
+    const spot = favoriteSpots.find((item) => item.id === favoriteElements.select.value);
+    if (!spot) return;
+    if (spot.regionKey !== regionKey) {
+      showToast(`Ce spot se trouve dans la zone ${spot.regionLabel}.`);
+      return;
+    }
+    const estimated = estimatePoint(spot.lon, spot.lat);
+    const nearest = nearestPoint(spot.lon, spot.lat);
+    const point = estimated?.point || nearest?.point;
+    if (!point) {
+      showToast("Aucune prévision disponible pour ce spot.");
+      return;
+    }
+    if (map) {
+      map.flyTo({ center: [spot.lon, spot.lat], zoom: Math.max(map.getZoom(), 9), duration: 850 });
+    }
+    if (estimated) renderPoint({ ...estimated.point, favoriteName: spot.name, favoriteCategory: spot.category }, estimated.distance);
+    else renderPoint({ ...point, favoriteName: spot.name, favoriteCategory: spot.category }, nearest.distance);
+    elements.pointName.textContent = spot.name;
+    elements.pointRegion.textContent = `${spot.category.toUpperCase()} · ${spot.regionLabel}`;
+    showToast(`Conditions affichées pour « ${spot.name} ».`);
+  }
+
+  function deleteSelectedFavorite() {
+    const id = favoriteElements.select.value;
+    const spot = favoriteSpots.find((item) => item.id === id);
+    if (!spot) return;
+    favoriteSpots = favoriteSpots.filter((item) => item.id !== id);
+    if (persistFavoriteSpots()) {
+      refreshFavoriteControls();
+      showToast(`Spot « ${spot.name} » supprimé des favoris.`);
+    }
+  }
+
   function renderPoint(point, distance = null) {
     selectedPoint = point;
     if (distance !== null) selectedDistance = distance;
+    if (favoriteElements?.save) refreshFavoriteControls();
     elements.emptyState.classList.add("is-hidden");
     elements.pointDetails.classList.remove("is-hidden");
     elements.pointRegion.textContent = `${point.region || "POINT MARIN"}${selectedDistance === null ? "" : ` · À ${Math.round(selectedDistance)} KM`}`;
@@ -1690,6 +1811,14 @@
   }
 
   function setupControls() {
+    refreshFavoriteControls();
+    favoriteElements.save.addEventListener("click", saveSelectedFavorite);
+    favoriteElements.select.addEventListener("change", refreshFavoriteControls);
+    favoriteElements.open.addEventListener("click", openSelectedFavorite);
+    favoriteElements.remove.addEventListener("click", deleteSelectedFavorite);
+    favoriteElements.name.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") { event.preventDefault(); saveSelectedFavorite(); }
+    });
     appearanceToggle.addEventListener("click", () => {
       lightAppearance = !lightAppearance;
       appShell.classList.toggle("theme-light", lightAppearance);
@@ -1737,6 +1866,7 @@
     $("#clear-selection").addEventListener("click", () => {
       selectedPoint = null;
       selectedDistance = null;
+      refreshFavoriteControls();
       depthRequestId += 1;
       elements.pointDetails.classList.add("is-hidden");
       elements.emptyState.classList.remove("is-hidden");

@@ -460,3 +460,20 @@ button { color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+
+/* Spots favoris */
+.favorites-panel { display: grid; gap: 8px; margin: 14px 0 12px; padding: 12px; border: 1px solid rgba(98, 185, 179, .3); border-radius: 14px; background: rgba(98, 185, 179, .07); }
+.favorites-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px; font-size: 12px; }
+.favorites-heading span { min-width: 22px; padding: 3px 6px; border-radius: 999px; background: rgba(98, 185, 179, .16); text-align: center; font-size: 10px; }
+#favorite-name, #favorite-category, #favorites-select { width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid rgba(120, 205, 197, .28); border-radius: 9px; color: var(--ink); background: var(--paper-solid); font-size: 11px; }
+#favorite-name { outline-offset: 2px; }
+#favorite-category option, #favorites-select option { color: #152b35; background: #fff; }
+.favorite-save, .favorite-actions button { min-height: 34px; padding: 7px 9px; border: 1px solid rgba(98, 185, 179, .35); border-radius: 9px; color: var(--ink); background: rgba(98, 185, 179, .13); font-size: 10px; font-weight: 750; cursor: pointer; }
+.favorite-save { color: #fff; background: linear-gradient(110deg, #167783, #0f5b66); }
+.favorite-save:disabled, .favorite-actions button:disabled { opacity: .42; cursor: not-allowed; }
+.favorite-actions { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.favorite-actions button:last-child { color: var(--red); background: transparent; }
+.favorites-help { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
+.app-shell:not(.theme-light) .favorites-panel { background: rgba(98, 185, 179, .07); }
+.app-shell:not(.theme-light) #favorite-name, .app-shell:not(.theme-light) #favorite-category, .app-shell:not(.theme-light) #favorites-select { color: #152b35; background: #f8fbfa; }

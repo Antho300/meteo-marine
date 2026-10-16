@@ -171,6 +171,27 @@
         <button class="estimate-toggle" id="estimate-toggle" type="button" aria-pressed="false">
           Estimation au clic <span id="estimate-state">DÉSACTIVÉE</span>
         </button>
+        <section class="favorites-panel" aria-label="Spots favoris">
+          <div class="favorites-heading"><strong>★ Spots favoris</strong><span id="favorites-count">0</span></div>
+          <label class="field-label" for="favorite-name">Nom du spot</label>
+          <input id="favorite-name" type="text" maxlength="60" placeholder="Ex. Épave du Chaouen" autocomplete="off">
+          <label class="field-label" for="favorite-category">Type de spot</label>
+          <select id="favorite-category">
+            <option value="Plongée">Plongée</option>
+            <option value="Épave">Épave</option>
+            <option value="Tombant">Tombant</option>
+            <option value="Pêche">Spot de pêche</option>
+            <option value="Autre">Autre</option>
+          </select>
+          <button id="save-favorite" class="favorite-save" type="button" disabled>＋ Enregistrer le point choisi</button>
+          <label class="field-label" for="favorites-select">Accès rapide</label>
+          <select id="favorites-select"><option value="">Aucun spot enregistré</option></select>
+          <div class="favorite-actions">
+            <button id="open-favorite" type="button" disabled>Afficher le spot</button>
+            <button id="delete-favorite" type="button" disabled aria-label="Supprimer le spot favori sélectionné">Supprimer</button>
+          </div>
+          <p class="favorites-help">Les favoris sont enregistrés dans ce navigateur. Sélectionne un point sur la carte pour l’ajouter.</p>
+        </section>
         <div class="map-legend" id="map-legend"><span class="legend-dot calm"></span><span>Calme</span><span class="legend-dot moderate"></span><span>Modéré</span><span class="legend-dot rough"></span><span>Soutenu</span></div>
         <p class="map-hint">Touchez la carte pour choisir un point</p>
       </aside>
